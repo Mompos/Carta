@@ -22,22 +22,37 @@
 
     <main id="escenario">
       <article id="carta" class="carta">
-        <div id="texto" class="texto">
-          <p class="fecha">14 de febrero</p>
-          <p>Querida mía:</p>
-          <p class="cuerpo">Te escribo a mano porque las pantallas no saben guardar el temblor de los dedos. Cada letra de esta carta lleva un poco de mí: el café de la mañana, la ventana abierta, tu nombre repetido en voz baja.</p>
-          <p class="cuerpo">Prometo esperarte en el mismo lugar de siempre, aunque el tiempo cambie los nombres de las calles. Si algún día dudas, vuelve a leer estas líneas; aquí seguirá todo lo que no supe decirte de frente.</p>
-          <p class="cuerpo">Te quiero hoy, y te querré mañana.</p>
-          <p class="firma">Para siempre,<br />A.</p>
-        </div>
+        <div id="texto" class="texto"></div>
         <canvas id="tinta"></canvas>
+        <div class="arrugas"></div>
+        <span id="numero" class="numero"></span>
       </article>
     </main>
 
     <footer>
-      <p id="pista">Frota de lado a lado para rayar · Arriba y abajo para borrar</p>
-      <button id="reiniciar" type="button">Reiniciar</button>
+      <p id="pista">Frota de lado a lado para rayar · Arriba y abajo para borrar · Mantén presionado para arrugar</p>
     </footer>
+
+    <div id="paginas" hidden>
+      <section class="pagina">
+        <p class="fecha">14 de febrero</p>
+        <p>Querida mía:</p>
+        <p class="cuerpo">Te escribo a mano porque las pantallas no saben guardar el temblor de los dedos. Cada letra de esta carta lleva un poco de mí: el café de la mañana, la ventana abierta, tu nombre repetido en voz baja.</p>
+        <p class="cuerpo">Prometo esperarte en el mismo lugar de siempre, aunque el tiempo cambie los nombres de las calles.</p>
+      </section>
+
+      <section class="pagina">
+        <p class="cuerpo">Si algún día dudas, vuelve a leer estas líneas; aquí seguirá todo lo que no supe decirte de frente.</p>
+        <p class="cuerpo">Guardo tu risa en el bolsillo izquierdo, junto a las llaves y a un boleto viejo de cine que nunca quise botar.</p>
+        <p class="cuerpo">A veces la tinta se corre cuando pienso en ti, y dejo la mancha como prueba de que fue verdad.</p>
+      </section>
+
+      <section class="pagina">
+        <p class="cuerpo">No sé cuánto dura un papel, ni cuánto dura una promesa escrita con prisa.</p>
+        <p class="cuerpo">Te quiero hoy, y te querré mañana.</p>
+        <p class="firma">Para siempre,<br />A.</p>
+      </section>
+    </div>
 
     <script src="js/script.js"></script>
   </body>

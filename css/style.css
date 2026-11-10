@@ -71,6 +71,37 @@ main {
     0 12px 40px rgba(0, 0, 0, 0.45);
   touch-action: none;
   cursor: crosshair;
+  will-change: transform, clip-path;
+}
+
+.arrugas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--arrugado, 0);
+  background:
+    linear-gradient(115deg, transparent 29%, rgba(60, 40, 10, 0.16) 30%, rgba(255, 255, 255, 0.35) 31%, transparent 32.5%),
+    linear-gradient(62deg, transparent 54%, rgba(60, 40, 10, 0.14) 55%, rgba(255, 255, 255, 0.3) 56%, transparent 57.5%),
+    linear-gradient(158deg, transparent 69%, rgba(60, 40, 10, 0.14) 70%, rgba(255, 255, 255, 0.3) 71%, transparent 72.5%),
+    linear-gradient(22deg, transparent 40%, rgba(60, 40, 10, 0.12) 41%, rgba(255, 255, 255, 0.28) 42%, transparent 43.5%),
+    linear-gradient(97deg, transparent 63%, rgba(60, 40, 10, 0.12) 64%, rgba(255, 255, 255, 0.28) 65%, transparent 66.5%),
+    linear-gradient(140deg, transparent 18%, rgba(60, 40, 10, 0.12) 19%, rgba(255, 255, 255, 0.25) 20%, transparent 21.5%),
+    radial-gradient(circle at 25% 35%, rgba(70, 50, 20, 0.18), transparent 25%),
+    radial-gradient(circle at 70% 60%, rgba(70, 50, 20, 0.2), transparent 30%),
+    radial-gradient(circle at 45% 80%, rgba(255, 255, 255, 0.3), transparent 25%);
+}
+
+.numero {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2.2%;
+  text-align: center;
+  font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
+  font-size: calc(var(--fuente, 20px) * 0.75);
+  color: var(--tinta);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .carta::after {
@@ -144,27 +175,10 @@ footer {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 2.6em;
+  height: 3.9em;
   line-height: 1.3;
   font-style: italic;
   font-size: 15px;
   text-align: center;
   opacity: 0.8;
-}
-
-button {
-  min-height: 44px;
-  padding: 10px 22px;
-  font-family: inherit;
-  font-size: 16px;
-  color: inherit;
-  background: transparent;
-  border: 1px solid rgba(233, 224, 204, 0.45);
-  border-radius: 999px;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-button:active {
-  background: rgba(233, 224, 204, 0.12);
 }

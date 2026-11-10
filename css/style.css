@@ -1,0 +1,170 @@
+:root {
+  --fondo: #2b2622;
+  --papel: #f3ead5;
+  --tinta: #1d2340;
+  --texto-claro: #e9e0cc;
+  --linea: rgba(70, 100, 150, 0.22);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--fondo);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  font-family: "Times New Roman", Times, serif;
+  color: var(--texto-claro);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+header {
+  padding: 14px 16px 4px;
+  text-align: center;
+}
+
+h1 {
+  font-weight: normal;
+  font-size: clamp(18px, 2.4vw, 24px);
+  letter-spacing: 0.02em;
+}
+
+h1 em {
+  display: block;
+  font-size: 0.8em;
+  opacity: 0.65;
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+}
+
+.carta {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.35), transparent 60%),
+    var(--papel);
+  border-radius: 2px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 12px 40px rgba(0, 0, 0, 0.45);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.carta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--desgaste, 0);
+  background:
+    linear-gradient(90deg, transparent 49.6%, rgba(90, 60, 20, 0.18) 50%, transparent 50.4%),
+    linear-gradient(0deg, transparent 32.8%, rgba(90, 60, 20, 0.14) 33.3%, transparent 33.8%),
+    radial-gradient(ellipse at 70% 80%, rgba(140, 95, 35, 0.25), transparent 35%),
+    radial-gradient(ellipse at center, transparent 40%, rgba(120, 80, 30, 0.45) 100%);
+  mix-blend-mode: multiply;
+}
+
+.texto {
+  position: absolute;
+  inset: 7% 8% 6%;
+  padding: 0 0.25em;
+  overflow: hidden;
+  font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
+  font-size: var(--fuente, 20px);
+  line-height: 1.45;
+  color: var(--tinta);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--fuente, 20px) * 1.45 - 1px),
+    var(--linea) calc(var(--fuente, 20px) * 1.45 - 1px),
+    var(--linea) calc(var(--fuente, 20px) * 1.45)
+  );
+}
+
+.texto .fecha,
+.texto .firma {
+  text-align: right;
+}
+
+.texto .cuerpo {
+  text-indent: 1.5em;
+}
+
+.palabra {
+  transition: opacity 0.25s, filter 0.25s;
+}
+
+.palabra.borrada {
+  opacity: 0 !important;
+}
+
+canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 18px;
+  padding: 6px 16px 14px;
+}
+
+#pista {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 2.6em;
+  line-height: 1.3;
+  font-style: italic;
+  font-size: 15px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+button {
+  min-height: 44px;
+  padding: 10px 22px;
+  font-family: inherit;
+  font-size: 16px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid rgba(233, 224, 204, 0.45);
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:active {
+  background: rgba(233, 224, 204, 0.12);
+}

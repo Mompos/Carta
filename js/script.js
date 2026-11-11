@@ -13,8 +13,19 @@ const VENTANA_GESTO = 450;
 const TIEMPO_GASTADA = 60000;
 const ESPERA_ARRUGAR = 1200;
 const TIEMPO_ARRUGAR = 10000;
-const PISTA_INICIAL = pista.textContent;
-const paginas = [...document.querySelectorAll("#paginas .pagina")].map((s) => s.innerHTML);
+const INICIO_PUENTE = 280;
+const FONDO = "#2b2622";
+const PISTA_INICIAL = "Frota de lado a lado para rayar · Arriba y abajo para borrar · Mantén presionado para arrugar";
+const PISTA_PUENTE = "Raspa una cerilla en la caja y lánzala al puente";
+const paginas = [...document.querySelectorAll("#paginas .pagina:not(.puente)")].map((s) => s.innerHTML);
+const paginaPuente = document.querySelector("#paginas .pagina.puente").innerHTML;
+const quemado = document.getElementById("quemado");
+const qctx = quemado.getContext("2d");
+const cancion = document.getElementById("cancion");
+
+let enPuente = false;
+let ardiendo = false;
+let historiaIniciada = false;
 
 let ancho = 0;
 let alto = 0;
@@ -97,6 +108,9 @@ function ajustar() {
   lienzo.width = Math.round(ancho * dpr);
   lienzo.height = Math.round(alto * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  quemado.width = lienzo.width;
+  quemado.height = lienzo.height;
+  qctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   medir();
   redibujar();
@@ -256,7 +270,7 @@ function borrar(a, b) {
     }
   });
 
-  if (palabras.length && palabras.every((p) => p.borrada)) siguientePagina();
+  if (!enPuente && palabras.length && palabras.every((p) => p.borrada)) siguientePagina();
 }
 
 function giros(valores, minimo) {
@@ -307,16 +321,23 @@ function aplicar(dedo, a, b) {
   else if (dedo.modo === "borrar") borrar(a, b);
 }
 
-function actualizarPista() {
-  if (animando) return;
-  const desgaste = Math.min(1, tiempoActivo / TIEMPO_GASTADA);
+function actualizarDesgaste() {
+  const avanceCancion = cancion.duration ? cancion.currentTime / cancion.duration : 0;
+  const desgaste = Math.min(1, Math.max(tiempoActivo / TIEMPO_GASTADA, avanceCancion));
   carta.style.setProperty("--desgaste", desgaste.toFixed(3));
+  return desgaste;
+}
+
+function actualizarPista() {
+  if (animando || !historiaIniciada || ardiendo) return;
+  const desgaste = actualizarDesgaste();
   const modos = [...dedos.values()].map((d) => d.modo);
   if (presion && presion.avance > 0) {
     const quedan = Math.ceil((TIEMPO_ARRUGAR - (performance.now() - presion.inicio)) / 1000);
     pista.textContent = `Arrugando la hoja… ${quedan}`;
   } else if (modos.includes("rayar")) pista.textContent = "Rayando…";
   else if (modos.includes("borrar")) pista.textContent = "Borrando…";
+  else if (enPuente) pista.textContent = PISTA_PUENTE;
   else if (desgaste >= 1) pista.textContent = "La carta ya está gastada.";
   else pista.textContent = PISTA_INICIAL;
 }
@@ -469,8 +490,12 @@ async function arrugar() {
   await entrar([{ opacity: 0, transform: "translateY(18px) scale(0.97)" }, { opacity: 1, transform: "none" }]);
 }
 
-async function siguientePagina() {
-  if (animando) return;
+function siguientePagina() {
+  return cambiarPagina((actual + 1) % paginas.length);
+}
+
+async function cambiarPagina(destino) {
+  if (animando) return false;
   animando = true;
   cancelarPresion();
   soltarTodos();
@@ -483,10 +508,10 @@ async function siguientePagina() {
 
   limpiarForma();
   carta.style.opacity = 0;
-  cargarPagina((actual + 1) % paginas.length);
-  pista.textContent = `Página ${actual + 1}`;
+  cargarPagina(destino);
   carta.style.opacity = "";
   await entrar([{ opacity: 0, transform: "translateX(40px) rotate(3deg)" }, { opacity: 1, transform: "none" }]);
+  return true;
 }
 
 async function entrar(cuadros) {
@@ -496,32 +521,34 @@ async function entrar(cuadros) {
 }
 
 function cargarPagina(i) {
-  actual = i;
-  texto.innerHTML = paginas[i];
+  enPuente = i === "puente";
+  document.body.classList.toggle("puente-activo", enPuente);
+  if (!enPuente) actual = i;
+  texto.innerHTML = enPuente ? paginaPuente : paginas[i];
   envolverPalabras();
   trazos = [];
   tiempoActivo = 0;
-  numero.textContent = `— ${i + 1} —`;
+  numero.textContent = enPuente ? "" : `— ${i + 1} —`;
   ajustar();
   actualizarPista();
 }
 
 carta.addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  if (animando) return;
+  if (animando || ardiendo || !historiaIniciada) return;
   try {
     carta.setPointerCapture(e.pointerId);
   } catch (error) {}
   if (dedos.size === 0) medir();
   const p = punto(e);
   dedos.set(e.pointerId, { recorrido: [p], modo: null, trazo: null });
-  if (dedos.size === 1) iniciarPresion(e.pointerId, p);
+  if (dedos.size === 1 && !enPuente) iniciarPresion(e.pointerId, p);
   else cancelarPresion();
 });
 
 carta.addEventListener("pointermove", (e) => {
   const dedo = dedos.get(e.pointerId);
-  if (!dedo || animando) return;
+  if (!dedo || animando || ardiendo) return;
   const eventos = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
   (eventos.length ? eventos : [e]).forEach((ev) => procesar(dedo, punto(ev)));
   if (presion && presion.id === e.pointerId) {
@@ -554,5 +581,556 @@ new ResizeObserver(() => {
   });
 }).observe(escenario);
 
+const escenaSobre = document.getElementById("escena-sobre");
+const sobre = document.getElementById("sobre");
+const sello = document.getElementById("sello");
+const grietas = sello.querySelector(".grietas");
+const abrecartas = document.getElementById("abrecartas");
+const lienzoCorte = document.getElementById("corte");
+const cctx = lienzoCorte.getContext("2d");
+const TRAMOS_CORTE = 48;
+const tramosCortados = new Array(TRAMOS_CORTE).fill(false);
+
+let integridadSello = 1;
+let selloRoto = false;
+let toqueSello = null;
+let posAbre = { x: 0, y: 0, rot: 0 };
+let agarre = null;
+let ultimaPunta = null;
+let sobreAbierto = false;
+let audioPreparado = false;
+let esperandoToqueCancion = false;
+
+function esperar(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function prepararAudio() {
+  if (esperandoToqueCancion) {
+    cancion.play().then(() => {
+      esperandoToqueCancion = false;
+      actualizarPista();
+    }).catch(() => {});
+    return;
+  }
+  if (audioPreparado || sobreAbierto) return;
+  audioPreparado = true;
+  cancion.muted = true;
+  cancion.play().then(() => {
+    if (!sobreAbierto) {
+      cancion.pause();
+      cancion.currentTime = 0;
+    }
+    cancion.muted = false;
+  }).catch(() => {
+    cancion.muted = false;
+    audioPreparado = false;
+  });
+}
+
+["pointerup", "touchend", "click"].forEach((tipo) => document.addEventListener(tipo, prepararAudio, true));
+
+function empezarCancion() {
+  cancion.muted = false;
+  cancion.currentTime = 0;
+  cancion.play().catch(() => {
+    esperandoToqueCancion = true;
+    pista.textContent = "Toca la pantalla para escuchar la canción";
+  });
+}
+
+function soltarMiga(x, y) {
+  const miga = document.createElement("span");
+  miga.className = "miga";
+  miga.style.left = x + "px";
+  miga.style.top = y + "px";
+  document.body.appendChild(miga);
+  miga.animate(
+    [
+      { transform: "translate(0, 0) rotate(0)", opacity: 1 },
+      { transform: `translate(${(Math.random() - 0.5) * 70}px, ${120 + Math.random() * 120}px) rotate(${Math.random() * 360}deg)`, opacity: 0 },
+    ],
+    { duration: 800, easing: "ease-in" }
+  ).finished.then(() => miga.remove());
+}
+
+sello.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (selloRoto) return;
+  try {
+    sello.setPointerCapture(e.pointerId);
+  } catch (error) {}
+  toqueSello = { id: e.pointerId, x: e.clientX, y: e.clientY };
+});
+
+sello.addEventListener("pointermove", (e) => {
+  if (!toqueSello || toqueSello.id !== e.pointerId || selloRoto) return;
+  const distancia = Math.hypot(e.clientX - toqueSello.x, e.clientY - toqueSello.y);
+  toqueSello.x = e.clientX;
+  toqueSello.y = e.clientY;
+  const caja = sello.getBoundingClientRect();
+  const margen = caja.width * 0.4;
+  if (e.clientX < caja.left - margen || e.clientX > caja.right + margen || e.clientY < caja.top - margen || e.clientY > caja.bottom + margen) return;
+
+  integridadSello -= distancia / (caja.width * 7);
+  grietas.style.opacity = Math.min(1, (1 - integridadSello) * 1.4);
+  sello.style.transform = `translate(-50%, -50%) rotate(${(Math.random() - 0.5) * 6}deg)`;
+  if (Math.random() < distancia / 30) soltarMiga(e.clientX, e.clientY);
+  if (integridadSello <= 0) romperSello();
+});
+
+["pointerup", "pointercancel"].forEach((tipo) => sello.addEventListener(tipo, () => (toqueSello = null)));
+
+function romperSello() {
+  selloRoto = true;
+  toqueSello = null;
+  vibrar();
+  const caja = sello.getBoundingClientRect();
+  const anchoSobre = getComputedStyle(sobre).getPropertyValue("--ancho-sobre");
+  const cortes = [
+    "polygon(0 0, 52% 0, 46% 30%, 55% 44%, 44% 62%, 52% 80%, 48% 100%, 0 100%)",
+    "polygon(52% 0, 100% 0, 100% 100%, 48% 100%, 52% 80%, 44% 62%, 55% 44%, 46% 30%)",
+  ];
+  cortes.forEach((forma, i) => {
+    const pedazo = sello.cloneNode(true);
+    pedazo.removeAttribute("id");
+    pedazo.classList.add("pedazo");
+    Object.assign(pedazo.style, {
+      left: caja.left + "px",
+      top: caja.top + "px",
+      width: caja.width + "px",
+      height: caja.height + "px",
+      transform: "none",
+      clipPath: forma,
+    });
+    pedazo.style.setProperty("--ancho-sobre", anchoSobre);
+    document.body.appendChild(pedazo);
+    const lado = i ? 1 : -1;
+    pedazo.animate(
+      [
+        { transform: "translate(0, 0) rotate(0)", opacity: 1 },
+        { transform: `translate(${lado * 30}px, -10px) rotate(${lado * 15}deg)`, opacity: 1, offset: 0.2 },
+        { transform: `translate(${lado * 80}px, 70vh) rotate(${lado * 140}deg)`, opacity: 0 },
+      ],
+      { duration: 1300, easing: "ease-in" }
+    ).finished.then(() => pedazo.remove());
+  });
+  for (let i = 0; i < 10; i++) soltarMiga(caja.left + Math.random() * caja.width, caja.top + Math.random() * caja.height);
+  sello.style.visibility = "hidden";
+  pista.textContent = "Toma el abrecartas y deslízalo por el borde de arriba del sobre";
+}
+
+function pintarAbrecartas() {
+  abrecartas.style.transform = `translate(${posAbre.x}px, ${posAbre.y - abrecartas.offsetHeight / 2}px) rotate(${posAbre.rot}deg)`;
+}
+
+function abrecartasEnReposo(animar) {
+  const caja = sobre.getBoundingClientRect();
+  posAbre = {
+    x: caja.left + (caja.width - abrecartas.offsetWidth) / 2,
+    y: Math.min(caja.bottom + Math.max(50, caja.height * 0.35), window.innerHeight - 90),
+    rot: -6,
+  };
+  abrecartas.style.transition = animar ? "transform 0.4s ease-out" : "none";
+  pintarAbrecartas();
+}
+
+abrecartas.style.transformOrigin = "0 50%";
+
+function cortarEntre(x1, x2, caja) {
+  const desde = Math.max(0, Math.min(TRAMOS_CORTE - 1, Math.floor(((Math.min(x1, x2) - caja.left) / caja.width) * TRAMOS_CORTE)));
+  const hasta = Math.max(0, Math.min(TRAMOS_CORTE - 1, Math.floor(((Math.max(x1, x2) - caja.left) / caja.width) * TRAMOS_CORTE)));
+  if (Math.max(x1, x2) < caja.left || Math.min(x1, x2) > caja.right) return;
+  const w = lienzoCorte.width / TRAMOS_CORTE;
+  for (let i = desde; i <= hasta; i++) {
+    if (tramosCortados[i]) continue;
+    tramosCortados[i] = true;
+    cctx.fillStyle = "rgba(40, 25, 10, 0.85)";
+    cctx.fillRect(i * w, lienzoCorte.height * 0.35 + (Math.random() - 0.5) * 2, w + 1, lienzoCorte.height * 0.35);
+    cctx.fillStyle = "rgba(255, 250, 235, 0.7)";
+    cctx.fillRect(i * w, lienzoCorte.height * 0.7, w + 1, 1);
+  }
+  const cortado = tramosCortados.filter(Boolean).length / TRAMOS_CORTE;
+  if (cortado >= 0.85) abrirSobre();
+}
+
+abrecartas.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (sobreAbierto) return;
+  try {
+    abrecartas.setPointerCapture(e.pointerId);
+  } catch (error) {}
+  const distancia = Math.min(abrecartas.offsetWidth, Math.max(30, Math.hypot(e.clientX - posAbre.x, e.clientY - posAbre.y)));
+  agarre = { id: e.pointerId, distancia };
+  abrecartas.style.transition = "transform 0.15s ease-out";
+  setTimeout(() => {
+    if (agarre) abrecartas.style.transition = "none";
+  }, 150);
+  moverAbrecartas(e);
+});
+
+function moverAbrecartas(e) {
+  posAbre = { x: e.clientX, y: e.clientY - agarre.distancia, rot: 90 };
+  pintarAbrecartas();
+  const punta = { x: posAbre.x, y: posAbre.y };
+  const caja = sobre.getBoundingClientRect();
+  const tolerancia = Math.max(24, caja.height * 0.1);
+  const enBorde = Math.abs(punta.y - caja.top) < tolerancia && punta.x > caja.left - 10 && punta.x < caja.right + 10;
+  if (enBorde && !selloRoto) pista.textContent = "Primero quita el sello de cera";
+  if (enBorde && selloRoto && ultimaPunta && ultimaPunta.enBorde) cortarEntre(ultimaPunta.x, punta.x, caja);
+  ultimaPunta = { ...punta, enBorde };
+}
+
+abrecartas.addEventListener("pointermove", (e) => {
+  if (!agarre || agarre.id !== e.pointerId || sobreAbierto) return;
+  moverAbrecartas(e);
+});
+
+function soltarAbrecartas() {
+  if (!agarre) return;
+  agarre = null;
+  ultimaPunta = null;
+  if (!sobreAbierto) abrecartasEnReposo(true);
+}
+
+abrecartas.addEventListener("pointerup", soltarAbrecartas);
+abrecartas.addEventListener("pointercancel", soltarAbrecartas);
+
+function prepararCorte() {
+  const dpr = window.devicePixelRatio || 1;
+  lienzoCorte.width = Math.round(sobre.offsetWidth * dpr);
+  lienzoCorte.height = Math.round(6 * dpr);
+}
+
+async function abrirSobre() {
+  if (sobreAbierto) return;
+  sobreAbierto = true;
+  agarre = null;
+  vibrar();
+  empezarCancion();
+  if (!esperandoToqueCancion) pista.textContent = "";
+  abrecartas.style.transition = "transform 0.9s ease-in, opacity 0.9s";
+  posAbre = { x: posAbre.x + 40, y: window.innerHeight + 200, rot: 160 };
+  pintarAbrecartas();
+  abrecartas.style.opacity = 0;
+
+  sobre.classList.add("abierto");
+  await esperar(800);
+  sobre.classList.add("fuera");
+  await esperar(1300);
+  await escenaSobre.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, fill: "forwards" }).finished;
+  escenaSobre.style.display = "none";
+  historiaIniciada = true;
+  ajustar();
+  actualizarPista();
+  if (esperandoToqueCancion) pista.textContent = "Toca la pantalla para escuchar la canción";
+}
+
+let yendoAlPuente = false;
+
+async function irAlPuente() {
+  if (yendoAlPuente || enPuente) return;
+  yendoAlPuente = true;
+  const cambio = await cambiarPagina("puente");
+  yendoAlPuente = false;
+  if (cambio) mostrarCerillas();
+}
+
+cancion.addEventListener("timeupdate", () => {
+  if (!historiaIniciada) return;
+  if (!enPuente && !ardiendo && cancion.currentTime >= Math.min(INICIO_PUENTE, (cancion.duration || Infinity) - 30)) irAlPuente();
+  actualizarDesgaste();
+});
+
+cancion.addEventListener("ended", terminar);
+
+const cajetilla = document.getElementById("cajetilla");
+const raspador = cajetilla.querySelector(".raspador");
+const cerilla = document.getElementById("cerilla");
+let fosforo = null;
+
+function pintarCerilla() {
+  cerilla.style.transform = `translate(${fosforo.x - 4}px, ${fosforo.y - 5}px) rotate(${fosforo.rot}deg)`;
+}
+
+function mostrarCerillas() {
+  cajetilla.hidden = false;
+  cajetilla.animate([{ opacity: 0, transform: "translateY(20px)" }, { opacity: 1, transform: "none" }], { duration: 500 });
+  nuevaCerilla();
+}
+
+function nuevaCerilla() {
+  if (ardiendo) return;
+  const caja = cajetilla.getBoundingClientRect();
+  fosforo = { x: caja.left + caja.width * 0.72, y: caja.top - 34, rot: 14, encendida: false, frote: 0, historial: [], arrastre: null, vuelo: false };
+  cerilla.hidden = false;
+  cerilla.classList.remove("encendida");
+  cerilla.style.opacity = "";
+  pintarCerilla();
+  cerilla.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+}
+
+function encenderCerilla() {
+  fosforo.encendida = true;
+  cerilla.classList.add("encendida");
+  vibrar();
+  pista.textContent = "¡Lánzala al puente!";
+}
+
+function sobrePuente(x, y) {
+  const dibujo = texto.querySelector(".dibujo-puente");
+  if (!dibujo) return false;
+  const r = dibujo.getBoundingClientRect();
+  return x > r.left - 12 && x < r.right + 12 && y > r.top - 12 && y < r.bottom + 12;
+}
+
+cerilla.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (!fosforo || fosforo.vuelo || ardiendo) return;
+  try {
+    cerilla.setPointerCapture(e.pointerId);
+  } catch (error) {}
+  fosforo.arrastre = { id: e.pointerId, dx: e.clientX - fosforo.x, dy: e.clientY - fosforo.y };
+  fosforo.historial = [{ x: fosforo.x, y: fosforo.y, t: e.timeStamp }];
+  fosforo.rot = 0;
+  pintarCerilla();
+});
+
+cerilla.addEventListener("pointermove", (e) => {
+  if (!fosforo || !fosforo.arrastre || fosforo.arrastre.id !== e.pointerId) return;
+  const antes = { x: fosforo.x, y: fosforo.y };
+  fosforo.x = e.clientX - fosforo.arrastre.dx;
+  fosforo.y = e.clientY - fosforo.arrastre.dy;
+  fosforo.historial.push({ x: fosforo.x, y: fosforo.y, t: e.timeStamp });
+  while (fosforo.historial.length > 1 && e.timeStamp - fosforo.historial[0].t > 120) fosforo.historial.shift();
+  fosforo.rot = Math.max(-35, Math.min(35, (fosforo.x - antes.x) * 2));
+  pintarCerilla();
+
+  if (!fosforo.encendida) {
+    const r = raspador.getBoundingClientRect();
+    if (fosforo.x > r.left - 8 && fosforo.x < r.right + 8 && fosforo.y > r.top - 10 && fosforo.y < r.bottom + 10) {
+      fosforo.frote += Math.hypot(fosforo.x - antes.x, fosforo.y - antes.y);
+      if (fosforo.frote > 50) encenderCerilla();
+    }
+  }
+});
+
+function soltarCerilla(e) {
+  if (!fosforo || !fosforo.arrastre || fosforo.arrastre.id !== e.pointerId) return;
+  fosforo.arrastre = null;
+  const h = fosforo.historial;
+  const primero = h[0];
+  const ultimo = h[h.length - 1];
+  const dt = Math.max(16, ultimo.t - primero.t);
+  const quieta = e.timeStamp - ultimo.t > 90;
+  const vx = quieta ? 0 : (ultimo.x - primero.x) / dt;
+  const vy = quieta ? 0 : (ultimo.y - primero.y) / dt;
+
+  if (!fosforo.encendida) {
+    pista.textContent = "Raspa la cabeza de la cerilla en la franja oscura de la caja";
+    cerilla.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: "forwards" }).finished.then(nuevaCerilla);
+  } else if (Math.hypot(vx, vy) > 0.35) {
+    lanzarCerilla(vx, vy);
+  } else if (sobrePuente(fosforo.x, fosforo.y)) {
+    encenderPuente(fosforo.x, fosforo.y);
+  } else {
+    apagarCerilla();
+  }
+}
+
+cerilla.addEventListener("pointerup", soltarCerilla);
+cerilla.addEventListener("pointercancel", soltarCerilla);
+
+function lanzarCerilla(vx, vy) {
+  const tope = 3;
+  const v = Math.hypot(vx, vy);
+  if (v > tope) {
+    vx = (vx / v) * tope;
+    vy = (vy / v) * tope;
+  }
+  fosforo.vuelo = true;
+  let anterior = performance.now();
+  const inicio = anterior;
+  const giro = vx >= 0 ? 1 : -1;
+
+  function volar(ahora) {
+    const dt = Math.min(40, ahora - anterior);
+    anterior = ahora;
+    vy += 0.0012 * dt;
+    fosforo.x += vx * dt;
+    fosforo.y += vy * dt;
+    fosforo.rot += giro * dt * 0.5;
+    pintarCerilla();
+    if (sobrePuente(fosforo.x, fosforo.y)) {
+      encenderPuente(fosforo.x, fosforo.y);
+      return;
+    }
+    const fuera = fosforo.x < -50 || fosforo.x > window.innerWidth + 50 || fosforo.y < -80 || fosforo.y > window.innerHeight + 50;
+    if (fuera || ahora - inicio > 1600) {
+      apagarCerilla();
+      return;
+    }
+    requestAnimationFrame(volar);
+  }
+  requestAnimationFrame(volar);
+}
+
+function apagarCerilla() {
+  fosforo.vuelo = true;
+  cerilla.classList.remove("encendida");
+  pista.textContent = "Se apagó. Prueba con otra cerilla";
+  cerilla.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: "forwards" }).finished.then(() => {
+    cerilla.hidden = true;
+    setTimeout(nuevaCerilla, 400);
+  });
+}
+
+let fuego = null;
+
+function encenderPuente(x, y) {
+  if (ardiendo) return;
+  ardiendo = true;
+  soltarTodos();
+  cerilla.hidden = true;
+  vibrar();
+  pista.textContent = "";
+  cajetilla.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 600, fill: "forwards" }).finished.then(() => (cajetilla.hidden = true));
+  const base = carta.getBoundingClientRect();
+  const ahora = performance.now();
+  fuego = {
+    x: x - base.left,
+    y: y - base.top,
+    r: fuente * 0.4,
+    ultimo: ahora,
+    fases: [Math.random() * 6.3, Math.random() * 6.3, Math.random() * 6.3],
+    particulas: [],
+    consumido: false,
+  };
+  requestAnimationFrame(arder);
+}
+
+function radioFuego(a, t) {
+  return fuego.r * (1 + 0.2 * Math.sin(3 * a + fuego.fases[0] + t * 0.0008) + 0.1 * Math.sin(5 * a + fuego.fases[1] - t * 0.0013) + 0.06 * Math.sin(11 * a + fuego.fases[2] + t * 0.003));
+}
+
+function contornoFuego(t, extra) {
+  qctx.beginPath();
+  for (let i = 0; i <= 72; i++) {
+    const a = (i / 72) * Math.PI * 2;
+    const r = radioFuego(a, t) + extra;
+    const x = fuego.x + Math.cos(a) * r;
+    const y = fuego.y + Math.sin(a) * r;
+    if (i) qctx.lineTo(x, y);
+    else qctx.moveTo(x, y);
+  }
+  qctx.closePath();
+}
+
+function arder(ahora) {
+  const dt = Math.min(100, ahora - fuego.ultimo);
+  fuego.ultimo = ahora;
+  const diagonal = Math.hypot(Math.max(fuego.x, ancho - fuego.x), Math.max(fuego.y, alto - fuego.y));
+  const empuje = fuego.r > diagonal ? 2.5 : 1;
+  fuego.r += dt * ancho * (0.00005 + 0.00008 * Math.min(1, (fuego.r / diagonal) * 1.5)) * empuje;
+  if (fuego.r * 0.64 > diagonal + fuente * 2) fuego.consumido = true;
+
+  qctx.clearRect(0, 0, ancho, alto);
+  if (fuego.consumido) {
+    qctx.fillStyle = FONDO;
+    qctx.fillRect(0, 0, ancho, alto);
+  } else {
+    contornoFuego(ahora, fuente * 1.8);
+    qctx.fillStyle = "rgba(90, 50, 15, 0.28)";
+    qctx.fill();
+    contornoFuego(ahora, fuente * 0.8);
+    qctx.fillStyle = "rgba(45, 22, 8, 0.85)";
+    qctx.fill();
+    qctx.save();
+    qctx.shadowColor = "rgba(255, 130, 30, 0.95)";
+    qctx.shadowBlur = fuente * 0.8;
+    contornoFuego(ahora, fuente * 0.22);
+    qctx.fillStyle = "#ff8c26";
+    qctx.fill();
+    qctx.restore();
+    contornoFuego(ahora, 0);
+    qctx.fillStyle = FONDO;
+    qctx.fill();
+
+    for (let k = 0; k < 5; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = radioFuego(a, ahora) + fuente * 0.2;
+      const px = fuego.x + Math.cos(a) * r;
+      const py = fuego.y + Math.sin(a) * r;
+      if (px < 0 || px > ancho || py < 0 || py > alto) continue;
+      fuego.particulas.push({
+        x: px, y: py,
+        vx: (Math.random() - 0.5) * 0.03,
+        vy: -(0.04 + Math.random() * 0.08),
+        vida: 0,
+        max: 500 + Math.random() * 700,
+        tam: fuente * (0.25 + Math.random() * 0.45),
+        ceniza: Math.random() < 0.15,
+      });
+    }
+  }
+
+  fuego.particulas = fuego.particulas.filter((p) => (p.vida += dt) < p.max);
+  fuego.particulas.forEach((p) => {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    const resto = 1 - p.vida / p.max;
+    if (p.ceniza) {
+      qctx.globalCompositeOperation = "source-over";
+      qctx.fillStyle = `rgba(150, 140, 130, ${resto * 0.8})`;
+      qctx.fillRect(p.x, p.y, p.tam * 0.25, p.tam * 0.25);
+    } else {
+      qctx.globalCompositeOperation = "lighter";
+      const g = qctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.tam * resto);
+      g.addColorStop(0, `rgba(255, 230, 140, ${resto})`);
+      g.addColorStop(0.5, `rgba(255, 120, 20, ${resto * 0.7})`);
+      g.addColorStop(1, "rgba(255, 60, 0, 0)");
+      qctx.fillStyle = g;
+      qctx.beginPath();
+      qctx.arc(p.x, p.y, p.tam * resto, 0, Math.PI * 2);
+      qctx.fill();
+    }
+  });
+  qctx.globalCompositeOperation = "source-over";
+
+  if (fuego.consumido && fuego.particulas.length === 0) {
+    finQuemado();
+    return;
+  }
+  requestAnimationFrame(arder);
+}
+
+let quemaTerminada = false;
+
+async function finQuemado() {
+  quemaTerminada = true;
+  await carta.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, fill: "forwards" }).finished;
+  if (cancion.ended) terminar();
+}
+
+const fin = document.getElementById("fin");
+
+function terminar() {
+  if (!fin.hidden) return;
+  fin.hidden = false;
+  pista.textContent = "";
+  fin.addEventListener("click", () => location.reload(), { once: true });
+}
+
+window.addEventListener("resize", () => {
+  prepararCorte();
+  if (!agarre && !sobreAbierto) abrecartasEnReposo(false);
+  if (fosforo && !fosforo.arrastre && !fosforo.vuelo && !fosforo.encendida) nuevaCerilla();
+});
+
 cargarPagina(0);
-if (document.fonts) document.fonts.ready.then(ajustar);
+prepararCorte();
+abrecartasEnReposo(false);
+if (document.fonts) document.fonts.ready.then(() => {
+  ajustar();
+  abrecartasEnReposo(false);
+});

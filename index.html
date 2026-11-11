@@ -26,12 +26,59 @@
         <canvas id="tinta"></canvas>
         <div class="arrugas"></div>
         <span id="numero" class="numero"></span>
+        <canvas id="quemado"></canvas>
       </article>
     </main>
 
     <footer>
-      <p id="pista">Frota de lado a lado para rayar · Arriba y abajo para borrar · Mantén presionado para arrugar</p>
+      <p id="pista">Rasca el sello de cera para quitarlo</p>
     </footer>
+
+    <section id="escena-sobre" class="escena-sobre">
+      <div id="sobre" class="sobre">
+        <div class="sobre-fondo"></div>
+        <div class="hoja-dentro"></div>
+        <div class="sobre-frente">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path d="M0 100 L50 52 L100 100 M0 0 L42 50 M100 0 L58 50" />
+          </svg>
+        </div>
+        <div class="solapa"></div>
+        <canvas id="corte" class="corte"></canvas>
+        <div id="sello" class="sello">
+          <span>A</span>
+          <svg class="grietas" viewBox="0 0 100 100">
+            <path d="M50 4 L46 30 L55 44 L44 62 L52 80 L48 96" />
+            <path d="M46 30 L24 22 M55 44 L80 36 M44 62 L18 70 M52 80 L74 86" />
+          </svg>
+        </div>
+      </div>
+
+      <div id="abrecartas" class="abrecartas">
+        <svg viewBox="0 0 200 30">
+          <path class="hoja-metal" d="M2 15 L120 7 L124 15 L120 23 Z" />
+          <path class="filo" d="M2 15 L120 11" />
+          <rect class="guarda" x="122" y="4" width="8" height="22" rx="2" />
+          <rect class="mango" x="130" y="8" width="66" height="14" rx="7" />
+        </svg>
+      </div>
+    </section>
+
+    <div id="cajetilla" class="cajetilla" hidden>
+      <div class="raspador"></div>
+      <span>Cerillas</span>
+    </div>
+    <div id="cerilla" class="cerilla" hidden>
+      <span class="llama"></span>
+      <span class="cabeza"></span>
+    </div>
+
+    <section id="fin" class="fin" hidden>
+      <p class="fin-titulo">Fin</p>
+      <p class="fin-pista">Toca para volver a empezar</p>
+    </section>
+
+    <audio id="cancion" src="Assets/Leonard%20Cohen%20-%20Paper%20Thin%20Hotel%20(Official%20Audio).mp3" preload="auto"></audio>
 
     <div id="paginas" hidden>
       <section class="pagina">
@@ -51,6 +98,20 @@
         <p class="cuerpo">No sé cuánto dura un papel, ni cuánto dura una promesa escrita con prisa.</p>
         <p class="cuerpo">Te quiero hoy, y te querré mañana.</p>
         <p class="firma">Para siempre,<br />A.</p>
+      </section>
+
+      <section class="pagina puente">
+        <p class="cuerpo">Este es el puente que construimos, carta por carta, para llegar hasta ti.</p>
+        <svg class="dibujo-puente" viewBox="0 0 300 120">
+          <path d="M0 106 L34 106 M266 106 L300 106" />
+          <path d="M30 106 Q150 0 270 106" />
+          <path d="M36 106 Q150 8 264 106" />
+          <path d="M4 55 L296 55 M4 62 L296 62" />
+          <path d="M60 62 L60 82 M90 62 L90 66 M210 62 L210 66 M240 62 L240 82" />
+          <path d="M10 55 L10 45 M30 55 L30 45 M50 55 L50 45 M70 55 L70 45 M90 55 L90 45 M110 55 L110 45 M130 55 L130 45 M150 55 L150 45 M170 55 L170 45 M190 55 L190 45 M210 55 L210 45 M230 55 L230 45 M250 55 L250 45 M270 55 L270 45 M290 55 L290 45 M4 45 L296 45" />
+          <path class="agua" d="M20 112 Q40 108 60 112 T100 112 T140 112 M150 117 Q170 113 190 117 T230 117 T270 117" />
+        </svg>
+        <p class="cuerpo">Ahora no quiero volver.</p>
       </section>
     </div>
 

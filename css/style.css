@@ -71,7 +71,7 @@ main {
     0 12px 40px rgba(0, 0, 0, 0.45);
   touch-action: none;
   cursor: crosshair;
-  will-change: transform, clip-path;
+  will-change: transform;
 }
 
 .arrugas {
@@ -146,7 +146,7 @@ main {
 }
 
 .palabra {
-  transition: opacity 0.25s, filter 0.25s;
+  transition: opacity 0.25s;
 }
 
 .palabra.borrada {
@@ -496,6 +496,7 @@ body.puente-activo #pista {
 }
 
 .fin {
+  cursor: pointer;
   position: fixed;
   inset: 0;
   z-index: 8;

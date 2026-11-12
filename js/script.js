@@ -24,7 +24,23 @@ const quemado = document.getElementById("quemado");
 const qctx = quemado.getContext("2d");
 const cancion = document.getElementById("cancion");
 
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+const MAX_PARTICULAS = 180;
+
+function circuloDifuso(c, x, y, r, centro, borde) {
+  const degradado = c.createRadialGradient(x, y, 0, x, y, r);
+  degradado.addColorStop(0, centro);
+  degradado.addColorStop(1, borde);
+  c.fillStyle = degradado;
+  c.beginPath();
+  c.arc(x, y, r, 0, Math.PI * 2);
+  c.fill();
+}
+
 let enPuente = false;
+let origen = { x: 0, y: 0 };
+let ultimaPista = "";
+let ultimoDesgaste = -1;
 let ardiendo = false;
 let historiaIniciada = false;
 
@@ -98,23 +114,52 @@ function ajustar() {
   carta.style.width = ancho + "px";
   carta.style.height = alto + "px";
 
-  fuente = ancho * 0.075;
-  carta.style.setProperty("--fuente", fuente + "px");
-  while ((texto.scrollHeight > texto.clientHeight + 1 || texto.scrollWidth > texto.clientWidth + 1) && fuente > 8) {
-    fuente *= 0.96;
-    carta.style.setProperty("--fuente", fuente + "px");
-  }
+  ajustarFuente(ancho * 0.075);
 
-  const dpr = window.devicePixelRatio || 1;
-  lienzo.width = Math.round(ancho * dpr);
-  lienzo.height = Math.round(alto * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  lienzo.width = Math.round(ancho * DPR);
+  lienzo.height = Math.round(alto * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.strokeStyle = TINTA;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
   quemado.width = lienzo.width;
   quemado.height = lienzo.height;
-  qctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  qctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
   medir();
+  medirOrigen();
   redibujar();
+}
+
+function ponerFuente(f) {
+  fuente = f;
+  carta.style.setProperty("--fuente", f + "px");
+}
+
+function cabeTexto() {
+  return texto.scrollHeight <= texto.clientHeight + 1 && texto.scrollWidth <= texto.clientWidth + 1;
+}
+
+function ajustarFuente(maxima) {
+  ponerFuente(maxima);
+  if (cabeTexto()) return;
+  let menor = 8;
+  let mayor = maxima;
+  for (let i = 0; i < 9; i++) {
+    const prueba = (menor + mayor) / 2;
+    ponerFuente(prueba);
+    if (cabeTexto()) menor = prueba;
+    else mayor = prueba;
+  }
+  ponerFuente(menor);
+}
+
+function medirOrigen() {
+  const base = carta.offsetParent.getBoundingClientRect();
+  origen = {
+    x: base.left + carta.offsetLeft + carta.clientLeft,
+    y: base.top + carta.offsetTop + carta.clientTop,
+  };
 }
 
 function medir() {
@@ -136,36 +181,18 @@ function dibujarTramo(puntos, i) {
   const c = puntos[i];
   const inicio = i === 1 ? b : medio(puntos[i - 2], b);
   const fin = medio(b, c);
-  ctx.save();
-  ctx.strokeStyle = TINTA;
   ctx.lineWidth = c[2];
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
   ctx.beginPath();
   ctx.moveTo(inicio[0], inicio[1]);
   ctx.quadraticCurveTo(b[0], b[1], fin[0], fin[1]);
   ctx.stroke();
-  ctx.restore();
 }
 
 function borrarEn(x, y, r) {
-  ctx.save();
   ctx.globalCompositeOperation = "destination-out";
-  const goma = ctx.createRadialGradient(x, y, 0, x, y, r);
-  goma.addColorStop(0, "rgba(0,0,0,0.45)");
-  goma.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = goma;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
-
+  circuloDifuso(ctx, x, y, r, "rgba(0,0,0,0.45)", "rgba(0,0,0,0)");
   ctx.globalCompositeOperation = "source-over";
-  const mancha = ctx.createRadialGradient(x, y, 0, x, y, r);
-  mancha.addColorStop(0, "rgba(110,95,70,0.025)");
-  mancha.addColorStop(1, "rgba(110,95,70,0)");
-  ctx.fillStyle = mancha;
-  ctx.fill();
-  ctx.restore();
+  circuloDifuso(ctx, x, y, r, "rgba(110,95,70,0.025)", "rgba(110,95,70,0)");
 }
 
 function enPixeles(puntos) {
@@ -263,8 +290,7 @@ function borrar(a, b) {
 
   palabrasEn(b.x, b.y, r * 0.6).forEach((p) => {
     p.borrado = Math.min(1, p.borrado + (distancia * fuerza) / (p.h * 14));
-    p.el.style.opacity = 1 - p.borrado;
-    p.el.style.filter = `blur(${p.borrado * 2}px)`;
+    p.el.style.opacity = (1 - p.borrado).toFixed(2);
     if (p.borrado >= 0.8) {
       p.borrada = true;
       p.el.classList.add("borrada");
@@ -342,30 +368,43 @@ function tiempoHistoria() {
 
 function actualizarDesgaste() {
   const avanceCancion = historiaIniciada ? Math.min(1, tiempoHistoria() / duracionHistoria()) : 0;
-  const desgaste = Math.min(1, Math.max(tiempoActivo / TIEMPO_GASTADA, avanceCancion));
-  carta.style.setProperty("--desgaste", desgaste.toFixed(3));
+  const desgaste = Math.round(Math.min(1, Math.max(tiempoActivo / TIEMPO_GASTADA, avanceCancion)) * 100) / 100;
+  if (desgaste !== ultimoDesgaste) {
+    ultimoDesgaste = desgaste;
+    carta.style.setProperty("--desgaste", desgaste);
+  }
   return desgaste;
+}
+
+function ponerPista(mensaje) {
+  if (mensaje === ultimaPista && pista.textContent === mensaje) return;
+  ultimaPista = mensaje;
+  pista.textContent = mensaje;
 }
 
 function actualizarPista() {
   if (animando || !historiaIniciada || ardiendo) return;
   const desgaste = actualizarDesgaste();
-  const modos = [...dedos.values()].map((d) => d.modo);
+  let rayando = false;
+  let borrando = false;
+  dedos.forEach((d) => {
+    if (d.modo === "rayar") rayando = true;
+    else if (d.modo === "borrar") borrando = true;
+  });
   if (presion && presion.avance > 0) {
     const quedan = Math.ceil((TIEMPO_ARRUGAR - (performance.now() - presion.inicio)) / 1000);
-    pista.textContent = `Arrugando la hoja… ${quedan}`;
-  } else if (modos.includes("rayar")) pista.textContent = "Rayando…";
-  else if (modos.includes("borrar")) pista.textContent = "Borrando…";
-  else if (enPuente) pista.textContent = PISTA_PUENTE;
-  else if (desgaste >= 1) pista.textContent = "La carta ya está gastada.";
-  else pista.textContent = PISTA_INICIAL;
+    ponerPista(`Arrugando la hoja… ${quedan}`);
+  } else if (rayando) ponerPista("Rayando…");
+  else if (borrando) ponerPista("Borrando…");
+  else if (enPuente) ponerPista(PISTA_PUENTE);
+  else if (desgaste >= 1) ponerPista("La carta ya está gastada.");
+  else ponerPista(PISTA_INICIAL);
 }
 
 function punto(e) {
-  const base = carta.offsetParent.getBoundingClientRect();
   return {
-    x: e.clientX - base.left - carta.offsetLeft - carta.clientLeft,
-    y: e.clientY - base.top - carta.offsetTop - carta.clientTop,
+    x: e.clientX - origen.x,
+    y: e.clientY - origen.y,
     t: e.timeStamp || performance.now(),
     tipo: e.pointerType,
     presion: e.pressure,
@@ -565,7 +604,10 @@ carta.addEventListener("pointerdown", (e) => {
   try {
     carta.setPointerCapture(e.pointerId);
   } catch (error) {}
-  if (dedos.size === 0) medir();
+  if (dedos.size === 0) {
+    medir();
+    medirOrigen();
+  }
   const p = punto(e);
   dedos.set(e.pointerId, { recorrido: [p], modo: null, trazo: null });
   if (dedos.size === 1 && !enPuente) iniciarPresion(e.pointerId, p);
@@ -827,9 +869,8 @@ abrecartas.addEventListener("pointerup", soltarAbrecartas);
 abrecartas.addEventListener("pointercancel", soltarAbrecartas);
 
 function prepararCorte() {
-  const dpr = window.devicePixelRatio || 1;
-  lienzoCorte.width = Math.round(sobre.offsetWidth * dpr);
-  lienzoCorte.height = Math.round(6 * dpr);
+  lienzoCorte.width = Math.round(sobre.offsetWidth * DPR);
+  lienzoCorte.height = Math.round(6 * DPR);
 }
 
 async function abrirSobre() {
@@ -867,7 +908,7 @@ async function irAlPuente() {
   if (cambio) mostrarCerillas();
 }
 
-setInterval(() => {
+const reloj = setInterval(() => {
   if (!historiaIniciada) return;
   const t = tiempoHistoria();
   if (!enPuente && !ardiendo && t >= INICIO_PUENTE) irAlPuente();
@@ -1048,13 +1089,23 @@ function radioFuego(a, t) {
   return fuego.r * (1 + 0.2 * Math.sin(3 * a + fuego.fases[0] + t * 0.0008) + 0.1 * Math.sin(5 * a + fuego.fases[1] - t * 0.0013) + 0.06 * Math.sin(11 * a + fuego.fases[2] + t * 0.003));
 }
 
-function contornoFuego(t, extra) {
+const LADOS_FUEGO = 64;
+const angulosFuego = Array.from({ length: LADOS_FUEGO }, (_, i) => {
+  const a = (i / LADOS_FUEGO) * Math.PI * 2;
+  return { a, cos: Math.cos(a), sin: Math.sin(a) };
+});
+const radiosFuego = new Float32Array(LADOS_FUEGO);
+
+function calcularRadios(t) {
+  for (let i = 0; i < LADOS_FUEGO; i++) radiosFuego[i] = radioFuego(angulosFuego[i].a, t);
+}
+
+function contornoFuego(extra) {
   qctx.beginPath();
-  for (let i = 0; i <= 72; i++) {
-    const a = (i / 72) * Math.PI * 2;
-    const r = radioFuego(a, t) + extra;
-    const x = fuego.x + Math.cos(a) * r;
-    const y = fuego.y + Math.sin(a) * r;
+  for (let i = 0; i < LADOS_FUEGO; i++) {
+    const r = radiosFuego[i] + extra;
+    const x = fuego.x + angulosFuego[i].cos * r;
+    const y = fuego.y + angulosFuego[i].sin * r;
     if (i) qctx.lineTo(x, y);
     else qctx.moveTo(x, y);
   }
@@ -1074,28 +1125,29 @@ function arder(ahora) {
     qctx.fillStyle = FONDO;
     qctx.fillRect(0, 0, ancho, alto);
   } else {
-    contornoFuego(ahora, fuente * 1.8);
+    calcularRadios(ahora);
+    contornoFuego(fuente * 1.8);
     qctx.fillStyle = "rgba(90, 50, 15, 0.28)";
     qctx.fill();
-    contornoFuego(ahora, fuente * 0.8);
+    contornoFuego(fuente * 0.8);
     qctx.fillStyle = "rgba(45, 22, 8, 0.85)";
     qctx.fill();
-    qctx.save();
-    qctx.shadowColor = "rgba(255, 130, 30, 0.95)";
-    qctx.shadowBlur = fuente * 0.8;
-    contornoFuego(ahora, fuente * 0.22);
+    contornoFuego(fuente * 0.55);
+    qctx.fillStyle = "rgba(255, 120, 30, 0.4)";
+    qctx.fill();
+    contornoFuego(fuente * 0.22);
     qctx.fillStyle = "#ff8c26";
     qctx.fill();
-    qctx.restore();
-    contornoFuego(ahora, 0);
+    contornoFuego(0);
     qctx.fillStyle = FONDO;
     qctx.fill();
 
-    for (let k = 0; k < 5; k++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = radioFuego(a, ahora) + fuente * 0.2;
-      const px = fuego.x + Math.cos(a) * r;
-      const py = fuego.y + Math.sin(a) * r;
+    const nuevas = Math.min(MAX_PARTICULAS - fuego.particulas.length, Math.round((dt / 16) * 4));
+    for (let k = 0; k < nuevas; k++) {
+      const i = Math.floor(Math.random() * LADOS_FUEGO);
+      const r = radiosFuego[i] + fuente * 0.2;
+      const px = fuego.x + angulosFuego[i].cos * r;
+      const py = fuego.y + angulosFuego[i].sin * r;
       if (px < 0 || px > ancho || py < 0 || py > alto) continue;
       fuego.particulas.push({
         x: px, y: py,
@@ -1109,27 +1161,34 @@ function arder(ahora) {
     }
   }
 
-  fuego.particulas = fuego.particulas.filter((p) => (p.vida += dt) < p.max);
-  fuego.particulas.forEach((p) => {
+  const vivas = [];
+  for (const p of fuego.particulas) {
+    p.vida += dt;
+    if (p.vida >= p.max) continue;
+    vivas.push(p);
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     const resto = 1 - p.vida / p.max;
+    qctx.globalAlpha = resto;
     if (p.ceniza) {
       qctx.globalCompositeOperation = "source-over";
-      qctx.fillStyle = `rgba(150, 140, 130, ${resto * 0.8})`;
+      qctx.fillStyle = "rgba(150, 140, 130, 0.8)";
       qctx.fillRect(p.x, p.y, p.tam * 0.25, p.tam * 0.25);
     } else {
+      const r = p.tam * resto;
       qctx.globalCompositeOperation = "lighter";
-      const g = qctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.tam * resto);
-      g.addColorStop(0, `rgba(255, 230, 140, ${resto})`);
-      g.addColorStop(0.5, `rgba(255, 120, 20, ${resto * 0.7})`);
-      g.addColorStop(1, "rgba(255, 60, 0, 0)");
-      qctx.fillStyle = g;
+      const llama = qctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+      llama.addColorStop(0, "rgba(255, 230, 140, 1)");
+      llama.addColorStop(0.5, "rgba(255, 120, 20, 0.7)");
+      llama.addColorStop(1, "rgba(255, 60, 0, 0)");
+      qctx.fillStyle = llama;
       qctx.beginPath();
-      qctx.arc(p.x, p.y, p.tam * resto, 0, Math.PI * 2);
+      qctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       qctx.fill();
     }
-  });
+  }
+  fuego.particulas = vivas;
+  qctx.globalAlpha = 1;
   qctx.globalCompositeOperation = "source-over";
 
   if (fuego.consumido && fuego.particulas.length === 0) {
@@ -1139,18 +1198,15 @@ function arder(ahora) {
   requestAnimationFrame(arder);
 }
 
-let quemaTerminada = false;
-
-async function finQuemado() {
-  quemaTerminada = true;
-  await carta.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, fill: "forwards" }).finished;
-  if (cancion.ended) terminar();
+function finQuemado() {
+  carta.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, fill: "forwards" });
 }
 
 const fin = document.getElementById("fin");
 
 function terminar() {
   if (!fin.hidden) return;
+  clearInterval(reloj);
   fin.hidden = false;
   pista.textContent = "";
   fin.addEventListener("click", () => location.reload(), { once: true });

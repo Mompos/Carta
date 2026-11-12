@@ -534,3 +534,34 @@ body.puente-activo #pista {
   opacity: 0;
   transition: opacity 0.4s;
 }
+
+.sobre::after {
+  content: "";
+  position: absolute;
+  z-index: 4;
+  left: 3%;
+  right: 3%;
+  top: -2px;
+  border-top: 3px dashed rgba(255, 236, 190, 0.85);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sobre.sin-sello::after {
+  animation: guia 1.4s ease-in-out infinite;
+}
+
+.sobre.cortando::after {
+  animation: none;
+  opacity: 1;
+  border-top-color: #ffd36b;
+}
+
+.sobre.abierto::after {
+  display: none;
+}
+
+@keyframes guia {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}

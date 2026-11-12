@@ -736,7 +736,8 @@ function romperSello() {
   });
   for (let i = 0; i < 10; i++) soltarMiga(caja.left + Math.random() * caja.width, caja.top + Math.random() * caja.height);
   sello.style.visibility = "hidden";
-  pista.textContent = "Toma el abrecartas y deslízalo por el borde de arriba del sobre";
+  sobre.classList.add("sin-sello");
+  pista.textContent = "Toma el abrecartas y pasa la punta por la línea de arriba del sobre";
 }
 
 function pintarAbrecartas() {
@@ -770,7 +771,7 @@ function cortarEntre(x1, x2, caja) {
     cctx.fillRect(i * w, lienzoCorte.height * 0.7, w + 1, 1);
   }
   const cortado = tramosCortados.filter(Boolean).length / TRAMOS_CORTE;
-  if (cortado >= 0.85) abrirSobre();
+  if (cortado >= 0.7) abrirSobre();
 }
 
 abrecartas.addEventListener("pointerdown", (e) => {
@@ -779,8 +780,7 @@ abrecartas.addEventListener("pointerdown", (e) => {
   try {
     abrecartas.setPointerCapture(e.pointerId);
   } catch (error) {}
-  const distancia = Math.min(abrecartas.offsetWidth, Math.max(30, Math.hypot(e.clientX - posAbre.x, e.clientY - posAbre.y)));
-  agarre = { id: e.pointerId, distancia };
+  agarre = { id: e.pointerId, distancia: 56 };
   abrecartas.style.transition = "transform 0.15s ease-out";
   setTimeout(() => {
     if (agarre) abrecartas.style.transition = "none";
@@ -793,8 +793,10 @@ function moverAbrecartas(e) {
   pintarAbrecartas();
   const punta = { x: posAbre.x, y: posAbre.y };
   const caja = sobre.getBoundingClientRect();
-  const tolerancia = Math.max(24, caja.height * 0.1);
-  const enBorde = Math.abs(punta.y - caja.top) < tolerancia && punta.x > caja.left - 10 && punta.x < caja.right + 10;
+  const enBorde =
+    punta.y > caja.top - 40 && punta.y < caja.top + caja.height * 0.3 &&
+    punta.x > caja.left - 30 && punta.x < caja.right + 30;
+  sobre.classList.toggle("cortando", enBorde && selloRoto);
   if (enBorde && !selloRoto) pista.textContent = "Primero quita el sello de cera";
   if (enBorde && selloRoto && ultimaPunta && ultimaPunta.enBorde) cortarEntre(ultimaPunta.x, punta.x, caja);
   ultimaPunta = { ...punta, enBorde };
@@ -809,6 +811,7 @@ function soltarAbrecartas() {
   if (!agarre) return;
   agarre = null;
   ultimaPunta = null;
+  sobre.classList.remove("cortando");
   if (!sobreAbierto) abrecartasEnReposo(true);
 }
 

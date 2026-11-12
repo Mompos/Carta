@@ -565,3 +565,30 @@ body.puente-activo #pista {
   0%, 100% { opacity: 0.25; }
   50% { opacity: 1; }
 }
+
+.abrecartas::before {
+  content: "";
+  position: absolute;
+  inset: -28px -16px;
+}
+
+.sobre.sin-sello::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: -4%;
+  right: -4%;
+  top: -14%;
+  height: 74%;
+  border-radius: 8px;
+  background: rgba(255, 220, 140, 0.07);
+  pointer-events: none;
+}
+
+.sobre.cortando::before {
+  background: rgba(255, 210, 110, 0.16);
+}
+
+.sobre.abierto::before {
+  display: none;
+}

@@ -771,7 +771,7 @@ function cortarEntre(x1, x2, caja) {
     cctx.fillRect(i * w, lienzoCorte.height * 0.7, w + 1, 1);
   }
   const cortado = tramosCortados.filter(Boolean).length / TRAMOS_CORTE;
-  if (cortado >= 0.7) abrirSobre();
+  if (cortado >= 0.6) abrirSobre();
 }
 
 abrecartas.addEventListener("pointerdown", (e) => {
@@ -794,8 +794,8 @@ function moverAbrecartas(e) {
   const punta = { x: posAbre.x, y: posAbre.y };
   const caja = sobre.getBoundingClientRect();
   const enBorde =
-    punta.y > caja.top - 40 && punta.y < caja.top + caja.height * 0.3 &&
-    punta.x > caja.left - 30 && punta.x < caja.right + 30;
+    punta.y > caja.top - 90 && punta.y < caja.top + caja.height * 0.6 &&
+    punta.x > caja.left - 60 && punta.x < caja.right + 60;
   sobre.classList.toggle("cortando", enBorde && selloRoto);
   if (enBorde && !selloRoto) pista.textContent = "Primero quita el sello de cera";
   if (enBorde && selloRoto && ultimaPunta && ultimaPunta.enBorde) cortarEntre(ultimaPunta.x, punta.x, caja);

@@ -16,7 +16,7 @@ const TIEMPO_ARRUGAR = 10000;
 const INICIO_PUENTE = 280;
 const DURACION_CANCION = 343.6;
 const FONDO = "#2b2622";
-const PISTA_INICIAL = "Frota de lado a lado para rayar · Arriba y abajo para borrar · Mantén presionado para arrugar";
+const PISTA_INICIAL = "Tacha todo (↔) para avanzar · Borra todo (↕) para volver a empezar · Mantén presionado para arrugar";
 const PISTA_PUENTE = "Raspa una cerilla en la caja y lánzala al puente";
 const paginas = [...document.querySelectorAll("#paginas .pagina:not(.puente)")].map((s) => s.innerHTML);
 const paginaPuente = document.querySelector("#paginas .pagina.puente").innerHTML;
@@ -209,6 +209,7 @@ function tachar(p) {
   p.tachada = true;
   p.el.classList.add("tachada");
   vibrar();
+  queueMicrotask(revisarPagina);
   const t = nuevaLinea();
   const grosor = fuente * 0.13;
   const dientes = Math.max(4, Math.round(p.w / (fuente * 0.18)));
@@ -271,7 +272,7 @@ function borrar(a, b) {
     }
   });
 
-  if (!enPuente && palabras.length && palabras.every((p) => p.borrada)) siguientePagina();
+  revisarPagina();
 }
 
 function giros(valores, minimo) {
@@ -504,12 +505,19 @@ async function arrugar() {
   ).finished;
 
   limpiarForma();
-  cargarPagina(actual);
+  cargarPagina("puente");
   await entrar([{ opacity: 0, transform: "translateY(18px) scale(0.97)" }, { opacity: 1, transform: "none" }]);
+  mostrarCerillas();
 }
 
-function siguientePagina() {
-  return cambiarPagina((actual + 1) % paginas.length);
+function revisarPagina() {
+  if (enPuente || animando || !palabras.length) return;
+  if (palabras.every((p) => p.borrada)) {
+    cambiarPagina(0);
+  } else if (palabras.every((p) => p.tachada || p.borrada)) {
+    if (actual + 1 < paginas.length) cambiarPagina(actual + 1);
+    else irAlPuente();
+  }
 }
 
 async function cambiarPagina(destino) {

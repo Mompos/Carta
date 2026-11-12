@@ -10,13 +10,16 @@ const pista = document.getElementById("pista");
 const PROPORCION = 0.72;
 const TINTA = "#1d2340";
 const VENTANA_GESTO = 450;
-const TIEMPO_GASTADA = 60000;
+const GASTADA_TOQUE = 20000;
+const GASTADA_TIEMPO = 90;
+const PISTA_REVERSO = "Desliza hacia arriba para volver · Raspa una cerilla y lánzala para quemarla";
+const PISTA_GASTADA = "La carta ya está gastada: desliza hacia arriba para voltearla";
 const ESPERA_ARRUGAR = 1200;
 const TIEMPO_ARRUGAR = 10000;
 const INICIO_PUENTE = 280;
 const DURACION_CANCION = 343.6;
 const FONDO = "#2b2622";
-const PISTA_INICIAL = "Tacha todo (↔) para avanzar · Borra todo (↕) para volver a empezar · Mantén presionado para arrugar";
+const PISTA_INICIAL = "Tacha todo (↔) para avanzar · Borra todo (↕) para volver a empezar · Desliza hacia abajo para cortarla · Mantén presionado para arrugar";
 const PISTA_PUENTE = "Raspa una cerilla en la caja y lánzala al puente";
 const paginas = [...document.querySelectorAll("#paginas .pagina:not(.puente)")].map((s) => s.innerHTML);
 const paginaPuente = document.querySelector("#paginas .pagina.puente").innerHTML;
@@ -50,7 +53,10 @@ let fuente = 20;
 let actual = 0;
 let palabras = [];
 let trazos = [];
-let tiempoActivo = 0;
+let tiempoTocando = 0;
+let marcaDesgaste = 0;
+let volteada = false;
+let quemaReverso = false;
 let animando = false;
 let presion = null;
 let ultimaVibracion = 0;
@@ -266,6 +272,7 @@ function rayar(dedo, a, b) {
     dedo.trazo = nuevaLinea();
     agregarPunto(dedo.trazo, a.x, a.y, grosor);
   }
+  sonido.pluma(fuerza);
   const temblor = fuente * 0.05;
   agregarPunto(dedo.trazo, b.x + (Math.random() - 0.5) * temblor, b.y + (Math.random() - 0.5) * temblor, grosor);
 
@@ -279,6 +286,7 @@ function rayar(dedo, a, b) {
 
 function borrar(a, b) {
   const { distancia, fuerza } = intensidad(a, b);
+  sonido.goma(fuerza);
   const r = Math.max(fuente * 0.9, b.contacto * 0.6);
   const pasos = Math.max(1, Math.ceil(distancia / (r * 0.35)));
   for (let i = 1; i <= pasos; i++) {
@@ -343,8 +351,8 @@ function clasificar(dedo) {
 }
 
 function aplicar(dedo, a, b) {
-  if (animando) return;
-  tiempoActivo += Math.min(100, b.t - a.t);
+  if (animando || volteada) return;
+  tiempoTocando += Math.min(100, b.t - a.t);
   if (dedo.modo === "rayar") rayar(dedo, a, b);
   else if (dedo.modo === "borrar") borrar(a, b);
 }
@@ -366,9 +374,14 @@ function tiempoHistoria() {
   return Math.min(cancion.currentTime, real + 5);
 }
 
+function nivelDesgaste() {
+  if (!historiaIniciada) return 0;
+  const porTiempo = (tiempoHistoria() - marcaDesgaste) / GASTADA_TIEMPO;
+  return Math.min(1, Math.max(tiempoTocando / GASTADA_TOQUE, porTiempo));
+}
+
 function actualizarDesgaste() {
-  const avanceCancion = historiaIniciada ? Math.min(1, tiempoHistoria() / duracionHistoria()) : 0;
-  const desgaste = Math.round(Math.min(1, Math.max(tiempoActivo / TIEMPO_GASTADA, avanceCancion)) * 100) / 100;
+  const desgaste = Math.round(nivelDesgaste() * 100) / 100;
   if (desgaste !== ultimoDesgaste) {
     ultimoDesgaste = desgaste;
     carta.style.setProperty("--desgaste", desgaste);
@@ -382,9 +395,20 @@ function ponerPista(mensaje) {
   pista.textContent = mensaje;
 }
 
+let aviso = null;
+
+function avisar(mensaje) {
+  aviso = { mensaje, hasta: performance.now() + 2500 };
+  ponerPista(mensaje);
+}
+
 function actualizarPista() {
   if (animando || !historiaIniciada || ardiendo) return;
   const desgaste = actualizarDesgaste();
+  if (aviso && performance.now() < aviso.hasta && dedos.size === 0) {
+    ponerPista(aviso.mensaje);
+    return;
+  }
   let rayando = false;
   let borrando = false;
   dedos.forEach((d) => {
@@ -396,8 +420,9 @@ function actualizarPista() {
     ponerPista(`Arrugando la hoja… ${quedan}`);
   } else if (rayando) ponerPista("Rayando…");
   else if (borrando) ponerPista("Borrando…");
+  else if (volteada) ponerPista(PISTA_REVERSO);
   else if (enPuente) ponerPista(PISTA_PUENTE);
-  else if (desgaste >= 1) ponerPista("La carta ya está gastada.");
+  else if (desgaste >= 1) ponerPista(PISTA_GASTADA);
   else ponerPista(PISTA_INICIAL);
 }
 
@@ -414,6 +439,8 @@ function punto(e) {
 
 function procesar(dedo, p) {
   const anterior = dedo.recorrido[dedo.recorrido.length - 1];
+  if (anterior) dedo.camino += Math.hypot(p.x - anterior.x, p.y - anterior.y);
+  dedo.ultimo = p;
   dedo.recorrido.push(p);
   while (dedo.recorrido.length > 2 && p.t - dedo.recorrido[0].t > VENTANA_GESTO) dedo.recorrido.shift();
 
@@ -421,6 +448,7 @@ function procesar(dedo, p) {
   if (nuevo !== dedo.modo) {
     dedo.modo = nuevo;
     dedo.trazo = null;
+    if (nuevo) dedo.frotado = true;
     if (nuevo) {
       for (let i = 1; i < dedo.recorrido.length; i++) aplicar(dedo, dedo.recorrido[i - 1], dedo.recorrido[i]);
     }
@@ -472,6 +500,7 @@ function avanzarPresion() {
     carta.style.clipPath = aCss(mezclar(poligonoRecto(), presion.bola, avance * 0.15));
     carta.style.transform = `scale(${1 - avance * 0.06}) rotate(${-avance * 2.5}deg)`;
     arrugas.style.opacity = avance * 0.85;
+    sonido.crujido(avance);
     const segundo = Math.floor(t / 1000);
     if (segundo !== presion.segundo) {
       presion.segundo = segundo;
@@ -528,6 +557,7 @@ async function arrugar() {
   soltarTodos();
   pista.textContent = "…";
   vibrar();
+  sonido.arrugar();
   arrugas.style.opacity = 1;
 
   await carta.animate(
@@ -566,6 +596,7 @@ async function cambiarPagina(destino) {
   soltarTodos();
   vibrar();
   await new Promise((r) => setTimeout(r, 450));
+  sonido.pagina();
   await carta.animate(
     [{ transform: "none", opacity: 1 }, { transform: "translateX(-115%) rotate(-10deg)", opacity: 0 }],
     { duration: 700, easing: "ease-in", fill: "forwards" }
@@ -585,14 +616,15 @@ async function entrar(cuadros) {
   actualizarPista();
 }
 
-function cargarPagina(i) {
+function cargarPagina(i, contenido) {
   enPuente = i === "puente";
+  volteada = false;
+  carta.classList.remove("volteada");
   document.body.classList.toggle("puente-activo", enPuente);
   if (!enPuente) actual = i;
-  texto.innerHTML = enPuente ? paginaPuente : paginas[i];
+  texto.innerHTML = contenido || (enPuente ? paginaPuente : paginas[i]);
   envolverPalabras();
   trazos = [];
-  tiempoActivo = 0;
   numero.textContent = enPuente ? "" : `— ${i + 1} —`;
   ajustar();
   actualizarPista();
@@ -609,7 +641,7 @@ carta.addEventListener("pointerdown", (e) => {
     medirOrigen();
   }
   const p = punto(e);
-  dedos.set(e.pointerId, { recorrido: [p], modo: null, trazo: null });
+  dedos.set(e.pointerId, { recorrido: [p], modo: null, trazo: null, inicio: p, ultimo: p, camino: 0, frotado: false });
   if (dedos.size === 1 && !enPuente) iniciarPresion(e.pointerId, p);
   else cancelarPresion();
 });
@@ -627,9 +659,203 @@ carta.addEventListener("pointermove", (e) => {
 });
 
 function soltar(e) {
+  const dedo = dedos.get(e.pointerId);
   if (!dedos.delete(e.pointerId)) return;
   if (presion && presion.id === e.pointerId) cancelarPresion();
+  if (e.type === "pointerup" && dedos.size === 0) revisarDeslizamiento(dedo, punto(e));
   actualizarPista();
+}
+
+function revisarDeslizamiento(dedo, fin) {
+  if (dedo.frotado || animando || ardiendo) return;
+  if (fosforo && (fosforo.vuelo || fosforo.arrastre)) return;
+  const ini = dedo.inicio;
+  const dx = fin.x - ini.x;
+  const dy = fin.y - ini.y;
+  const distancia = Math.hypot(dx, dy);
+  const duracion = fin.t - ini.t;
+  const recto = dedo.camino < distancia * 1.3 + 10;
+  if (!recto || duracion > 900 || Math.abs(dy) < Math.abs(dx) * 1.6 || Math.abs(dy) < alto * 0.4) return;
+
+  if (dy < 0) {
+    if (volteada || nivelDesgaste() >= 1) voltearCarta();
+    else if (!enPuente) avisar("Todavía no está gastada para voltearla");
+  } else if (!volteada && !enPuente) {
+    partirCarta(ini, fin);
+  }
+}
+
+async function voltearCarta() {
+  if (enPuente) return;
+  animando = true;
+  cancelarPresion();
+  soltarTodos();
+  sonido.voltear();
+  await carta.animate(
+    [{ transform: "perspective(1400px) rotateY(0deg)" }, { transform: "perspective(1400px) rotateY(90deg)" }],
+    { duration: 280, easing: "ease-in", fill: "forwards" }
+  ).finished;
+  volteada = !volteada;
+  carta.classList.toggle("volteada", volteada);
+  if (volteada) mostrarCerillas();
+  else ocultarCerillas();
+  await carta.animate(
+    [{ transform: "perspective(1400px) rotateY(-90deg)" }, { transform: "perspective(1400px) rotateY(0deg)" }],
+    { duration: 320, easing: "ease-out" }
+  ).finished;
+  carta.getAnimations().forEach((a) => a.cancel());
+  animando = false;
+  actualizarPista();
+}
+
+function lineasDeTexto() {
+  const lineas = [];
+  palabras.forEach((p) => {
+    if (p.borrada) return;
+    let linea = lineas.find((l) => Math.abs(l.y - p.y) < p.h * 0.5);
+    if (!linea) {
+      linea = { y: p.y, h: p.h, palabras: [] };
+      lineas.push(linea);
+    }
+    linea.palabras.push(p);
+  });
+  lineas.sort((a, b) => a.y - b.y);
+  lineas.forEach((l) => l.palabras.sort((a, b) => a.x - b.x));
+  return lineas;
+}
+
+function dividirPalabra(p, corteX) {
+  const nodo = p.el.firstChild;
+  const largo = nodo.textContent.length;
+  const base = carta.getBoundingClientRect();
+  const rango = document.createRange();
+  let mejor = 0;
+  let mejorX = p.x;
+  let menor = Infinity;
+  for (let i = 0; i <= largo; i++) {
+    let x = p.x;
+    if (i > 0) {
+      rango.setStart(nodo, 0);
+      rango.setEnd(nodo, i);
+      x = rango.getBoundingClientRect().right - base.left;
+    }
+    if (Math.abs(x - corteX) < menor) {
+      menor = Math.abs(x - corteX);
+      mejor = i;
+      mejorX = x;
+    }
+  }
+  return { izquierda: nodo.textContent.slice(0, mejor), derecha: nodo.textContent.slice(mejor), x: mejorX };
+}
+
+function escapar(t) {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+}
+
+function unir(izquierda, derecha) {
+  if (!izquierda.texto) return derecha.texto;
+  if (!derecha.texto) return izquierda.texto;
+  const pegadas = izquierda.partida && derecha.partida;
+  return izquierda.texto + (pegadas ? "" : " ") + derecha.texto;
+}
+
+async function partirCarta(ini, fin) {
+  animando = true;
+  cancelarPresion();
+  soltarTodos();
+  sonido.rasgar();
+  medir();
+  const lineas = lineasDeTexto();
+  if (lineas.length < 2) {
+    animando = false;
+    return;
+  }
+
+  const pendiente = (fin.x - ini.x) / (fin.y - ini.y);
+  const corteEn = (y) => Math.min(ancho * 0.85, Math.max(ancho * 0.15, ini.x + (y - ini.y) * pendiente));
+
+  const mitades = lineas.map((l) => {
+    const corteX = corteEn(l.y + l.h / 2);
+    const izq = [];
+    const der = [];
+    let x = corteX;
+    let partidaIzq = false;
+    let partidaDer = false;
+    l.palabras.forEach((p) => {
+      const textoPalabra = p.el.textContent;
+      if (p.x + p.w <= corteX) izq.push(textoPalabra);
+      else if (p.x >= corteX) der.push(textoPalabra);
+      else {
+        const d = dividirPalabra(p, corteX);
+        x = d.x;
+        if (d.izquierda) {
+          izq.push(d.izquierda);
+          partidaIzq = !!d.derecha;
+        }
+        if (d.derecha) {
+          der.push(d.derecha);
+          partidaDer = !!d.izquierda;
+        }
+      }
+    });
+    return {
+      x,
+      arriba: l.y,
+      izquierda: { texto: izq.join(" "), partida: partidaIzq },
+      derecha: { texto: der.join(" "), partida: partidaDer },
+    };
+  });
+
+  const bordes = mitades.map((m, i) => (i === 0 ? 0 : (m.arriba + mitades[i - 1].arriba + lineas[i - 1].h) / 2));
+  bordes.push(alto);
+  const puntosIzq = [[0, 0]];
+  const puntosDer = [[ancho, 0], [ancho, alto]];
+  mitades.forEach((m, i) => {
+    puntosIzq.push([m.x, bordes[i]], [m.x, bordes[i + 1]]);
+  });
+  puntosIzq.push([0, alto]);
+  for (let i = mitades.length - 1; i >= 0; i--) puntosDer.push([mitades[i].x, bordes[i + 1]], [mitades[i].x, bordes[i]]);
+  const poligono = (pts) => `polygon(${pts.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(", ")})`;
+
+  const caja = carta.getBoundingClientRect();
+  const derecha = carta.cloneNode(true);
+  derecha.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
+  derecha.removeAttribute("id");
+  derecha.classList.add("mitad");
+  Object.assign(derecha.style, { left: caja.left + "px", top: caja.top + "px", clipPath: poligono(puntosDer) });
+  const copiaTinta = derecha.querySelector("canvas");
+  copiaTinta.width = lienzo.width;
+  copiaTinta.height = lienzo.height;
+  copiaTinta.getContext("2d").drawImage(lienzo, 0, 0);
+  document.body.appendChild(derecha);
+  carta.style.clipPath = poligono(puntosIzq);
+
+  const salto = lineas[1].y - lineas[0].y;
+  carta.animate([{ transform: "none" }, { transform: "translateX(-8px) rotate(-0.6deg)" }], { duration: 350, fill: "forwards" });
+  await derecha.animate(
+    [
+      { transform: "none" },
+      { transform: "translate(16px, 0) rotate(0.8deg)", offset: 0.35 },
+      { transform: `translate(16px, ${-salto}px) rotate(0.8deg)`, offset: 0.75 },
+      { transform: `translate(6px, ${-salto}px)` },
+    ],
+    { duration: 1300, easing: "ease-in-out", fill: "forwards" }
+  ).finished;
+  await esperar(900);
+
+  const nuevas = mitades.map((m, i) => unir(m.izquierda, mitades[(i + 1) % mitades.length].derecha));
+  const html = nuevas.filter(Boolean).map((t) => `<p>${escapar(t)}</p>`).join("");
+
+  await Promise.all([
+    carta.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" }).finished,
+    derecha.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" }).finished,
+  ]);
+  derecha.remove();
+  limpiarForma();
+  carta.style.opacity = 0;
+  cargarPagina(actual, html);
+  carta.style.opacity = "";
+  await entrar([{ opacity: 0 }, { opacity: 1 }]);
 }
 
 carta.addEventListener("pointerup", soltar);
@@ -698,6 +924,7 @@ function prepararAudio() {
 }
 
 ["pointerup", "touchend", "click"].forEach((tipo) => document.addEventListener(tipo, prepararAudio, true));
+["pointerdown", "pointerup", "touchend"].forEach((tipo) => document.addEventListener(tipo, () => sonido.iniciar(), true));
 
 function empezarCancion() {
   cancion.muted = false;
@@ -742,6 +969,7 @@ sello.addEventListener("pointermove", (e) => {
   if (e.clientX < caja.left - margen || e.clientX > caja.right + margen || e.clientY < caja.top - margen || e.clientY > caja.bottom + margen) return;
 
   integridadSello -= distancia / (caja.width * 7);
+  sonido.cera();
   grietas.style.opacity = Math.min(1, (1 - integridadSello) * 1.4);
   sello.style.transform = `translate(-50%, -50%) rotate(${(Math.random() - 0.5) * 6}deg)`;
   if (Math.random() < distancia / 30) soltarMiga(e.clientX, e.clientY);
@@ -754,6 +982,7 @@ function romperSello() {
   selloRoto = true;
   toqueSello = null;
   vibrar();
+  sonido.romperSello();
   const caja = sello.getBoundingClientRect();
   const anchoSobre = getComputedStyle(sobre).getPropertyValue("--ancho-sobre");
   const cortes = [
@@ -815,6 +1044,7 @@ function cortarEntre(x1, x2, caja) {
   for (let i = desde; i <= hasta; i++) {
     if (tramosCortados[i]) continue;
     tramosCortados[i] = true;
+    sonido.corte();
     cctx.fillStyle = "rgba(40, 25, 10, 0.85)";
     cctx.fillRect(i * w, lienzoCorte.height * 0.35 + (Math.random() - 0.5) * 2, w + 1, lienzoCorte.height * 0.35);
     cctx.fillStyle = "rgba(255, 250, 235, 0.7)";
@@ -886,6 +1116,7 @@ async function abrirSobre() {
   pintarAbrecartas();
   abrecartas.style.opacity = 0;
 
+  sonido.abrirSobre();
   sobre.classList.add("abierto");
   await esperar(800);
   sobre.classList.add("fuera");
@@ -920,6 +1151,7 @@ cancion.addEventListener("ended", () => {
   if (tiempoReal() >= duracionHistoria() - 20) terminar();
 });
 
+const reverso = document.getElementById("reverso");
 const cajetilla = document.getElementById("cajetilla");
 const raspador = cajetilla.querySelector(".raspador");
 const cerilla = document.getElementById("cerilla");
@@ -927,6 +1159,12 @@ let fosforo = null;
 
 function pintarCerilla() {
   cerilla.style.transform = `translate(${fosforo.x - 4}px, ${fosforo.y - 5}px) rotate(${fosforo.rot}deg)`;
+}
+
+function ocultarCerillas() {
+  cajetilla.hidden = true;
+  cerilla.hidden = true;
+  fosforo = null;
 }
 
 function mostrarCerillas() {
@@ -950,11 +1188,12 @@ function encenderCerilla() {
   fosforo.encendida = true;
   cerilla.classList.add("encendida");
   vibrar();
+  sonido.encender();
   pista.textContent = "¡Lánzala al puente!";
 }
 
-function sobrePuente(x, y) {
-  const dibujo = texto.querySelector(".dibujo-puente");
+function tocaObjetivo(x, y) {
+  const dibujo = volteada ? reverso : texto.querySelector(".dibujo-puente");
   if (!dibujo) return false;
   const r = dibujo.getBoundingClientRect();
   return x > r.left - 12 && x < r.right + 12 && y > r.top - 12 && y < r.bottom + 12;
@@ -1007,7 +1246,7 @@ function soltarCerilla(e) {
     cerilla.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: "forwards" }).finished.then(nuevaCerilla);
   } else if (Math.hypot(vx, vy) > 0.35) {
     lanzarCerilla(vx, vy);
-  } else if (sobrePuente(fosforo.x, fosforo.y)) {
+  } else if (tocaObjetivo(fosforo.x, fosforo.y)) {
     encenderPuente(fosforo.x, fosforo.y);
   } else {
     apagarCerilla();
@@ -1037,7 +1276,7 @@ function lanzarCerilla(vx, vy) {
     fosforo.y += vy * dt;
     fosforo.rot += giro * dt * 0.5;
     pintarCerilla();
-    if (sobrePuente(fosforo.x, fosforo.y)) {
+    if (tocaObjetivo(fosforo.x, fosforo.y)) {
       encenderPuente(fosforo.x, fosforo.y);
       return;
     }
@@ -1053,6 +1292,7 @@ function lanzarCerilla(vx, vy) {
 
 function apagarCerilla() {
   fosforo.vuelo = true;
+  if (cerilla.classList.contains("encendida")) sonido.soplo();
   cerilla.classList.remove("encendida");
   pista.textContent = "Se apagó. Prueba con otra cerilla";
   cerilla.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: "forwards" }).finished.then(() => {
@@ -1066,6 +1306,7 @@ let fuego = null;
 function encenderPuente(x, y) {
   if (ardiendo) return;
   ardiendo = true;
+  quemaReverso = volteada;
   soltarTodos();
   cerilla.hidden = true;
   vibrar();
@@ -1118,7 +1359,11 @@ function arder(ahora) {
   const diagonal = Math.hypot(Math.max(fuego.x, ancho - fuego.x), Math.max(fuego.y, alto - fuego.y));
   const empuje = fuego.r > diagonal ? 2.5 : 1;
   fuego.r += dt * ancho * (0.00005 + 0.00008 * Math.min(1, (fuego.r / diagonal) * 1.5)) * empuje;
-  if (fuego.r * 0.64 > diagonal + fuente * 2) fuego.consumido = true;
+  if (fuego.r * 0.64 > diagonal + fuente * 2 && !fuego.consumido) {
+    fuego.consumido = true;
+    sonido.apagarFuego();
+  }
+  if (!fuego.consumido) sonido.fuego(Math.min(1, fuego.r / diagonal));
 
   qctx.clearRect(0, 0, ancho, alto);
   if (fuego.consumido) {
@@ -1198,8 +1443,22 @@ function arder(ahora) {
   requestAnimationFrame(arder);
 }
 
-function finQuemado() {
-  carta.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, fill: "forwards" });
+async function finQuemado() {
+  await carta.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, fill: "forwards" }).finished;
+  if (!quemaReverso) return;
+  await esperar(1200);
+  qctx.clearRect(0, 0, ancho, alto);
+  fuego = null;
+  ardiendo = false;
+  quemaReverso = false;
+  tiempoTocando = 0;
+  marcaDesgaste = tiempoHistoria();
+  ocultarCerillas();
+  limpiarForma();
+  cargarPagina(0);
+  sonido.pagina();
+  animando = true;
+  await entrar([{ opacity: 0, transform: "translateY(18px) scale(0.97)" }, { opacity: 1, transform: "none" }]);
 }
 
 const fin = document.getElementById("fin");

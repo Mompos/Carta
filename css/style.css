@@ -593,3 +593,109 @@ body.puente-activo #pista {
 .sobre.abierto::before {
   display: none;
 }
+
+.reverso {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 60% 40%, rgba(255, 255, 255, 0.25), transparent 65%);
+}
+
+.carta.volteada .reverso {
+  display: block;
+}
+
+.carta.volteada .texto,
+.carta.volteada #tinta,
+.carta.volteada .numero {
+  visibility: hidden;
+}
+
+.foto {
+  position: absolute;
+  margin: 0;
+  padding: 4% 4% 0;
+  background: #fbf8f1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.foto::before {
+  content: "";
+  position: absolute;
+  left: 30%;
+  top: -6%;
+  width: 40%;
+  height: 12%;
+  background: rgba(235, 225, 190, 0.75);
+  transform: rotate(-4deg);
+}
+
+.foto .imagen,
+.foto img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  filter: sepia(0.35) contrast(0.95);
+}
+
+.foto figcaption {
+  padding: 0.25em 0 0.35em;
+  text-align: center;
+  font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
+  font-size: calc(var(--fuente, 20px) * 0.8);
+  color: var(--tinta);
+}
+
+.foto-1 { left: 7%; top: 6%; width: 46%; transform: rotate(-6deg); }
+.foto-2 { right: 6%; top: 11%; width: 40%; transform: rotate(5deg); }
+.foto-3 { left: 10%; top: 47%; width: 41%; transform: rotate(4deg); }
+.foto-4 { right: 8%; top: 51%; width: 39%; transform: rotate(-4deg); }
+
+.imagen-1 {
+  background:
+    radial-gradient(circle at 50% 62%, #ffd98a 0 12%, rgba(255, 200, 120, 0.5) 13%, transparent 30%),
+    linear-gradient(#f3b27a, #e0745a 55%, #4a3f5c 56%, #2f2a3d);
+}
+
+.imagen-2 {
+  background:
+    linear-gradient(transparent 49%, rgba(255, 255, 255, 0.7) 50%, transparent 52%),
+    linear-gradient(#a9cfe0, #d8ecf2 48%, #3d7f8f 50%, #20505c);
+}
+
+.imagen-3 {
+  background:
+    radial-gradient(circle, #ffd56b 0 1.5px, transparent 2.5px) 0 0 / 14px 11px,
+    linear-gradient(transparent 40%, #10131f 41%),
+    linear-gradient(#1b2340, #2c3560);
+}
+
+.imagen-4 {
+  background:
+    radial-gradient(circle at 30% 35%, #c9485b 0 14%, transparent 15%),
+    radial-gradient(circle at 65% 55%, #e07a5f 0 12%, transparent 13%),
+    radial-gradient(circle at 45% 75%, #b23a48 0 10%, transparent 11%),
+    linear-gradient(160deg, #6b8f5e, #3e5c3a);
+}
+
+.nota {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6%;
+  margin: 0;
+  text-align: center;
+  font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
+  font-size: var(--fuente, 20px);
+  color: var(--tinta);
+  transform: rotate(-2deg);
+}
+
+.mitad {
+  position: fixed;
+  z-index: 3;
+  margin: 0;
+  pointer-events: none;
+}

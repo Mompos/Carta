@@ -14,6 +14,7 @@ const TIEMPO_GASTADA = 60000;
 const ESPERA_ARRUGAR = 1200;
 const TIEMPO_ARRUGAR = 10000;
 const INICIO_PUENTE = 280;
+const DURACION_CANCION = 343.6;
 const FONDO = "#2b2622";
 const PISTA_INICIAL = "Frota de lado a lado para rayar · Arriba y abajo para borrar · Mantén presionado para arrugar";
 const PISTA_PUENTE = "Raspa una cerilla en la caja y lánzala al puente";
@@ -321,8 +322,25 @@ function aplicar(dedo, a, b) {
   else if (dedo.modo === "borrar") borrar(a, b);
 }
 
+let inicioHistoria = 0;
+
+function duracionHistoria() {
+  const d = cancion.duration;
+  return Number.isFinite(d) && d > INICIO_PUENTE + 30 ? d : DURACION_CANCION;
+}
+
+function tiempoReal() {
+  return inicioHistoria ? (performance.now() - inicioHistoria) / 1000 : 0;
+}
+
+function tiempoHistoria() {
+  const real = tiempoReal();
+  if (cancion.paused && cancion.currentTime === 0) return real;
+  return Math.min(cancion.currentTime, real + 5);
+}
+
 function actualizarDesgaste() {
-  const avanceCancion = cancion.duration ? cancion.currentTime / cancion.duration : 0;
+  const avanceCancion = historiaIniciada ? Math.min(1, tiempoHistoria() / duracionHistoria()) : 0;
   const desgaste = Math.min(1, Math.max(tiempoActivo / TIEMPO_GASTADA, avanceCancion));
   carta.style.setProperty("--desgaste", desgaste.toFixed(3));
   return desgaste;
@@ -607,6 +625,7 @@ function esperar(ms) {
 
 function prepararAudio() {
   if (esperandoToqueCancion) {
+    if (Number.isFinite(cancion.duration)) cancion.currentTime = Math.min(tiempoReal(), cancion.duration - 1);
     cancion.play().then(() => {
       esperandoToqueCancion = false;
       actualizarPista();
@@ -807,6 +826,7 @@ async function abrirSobre() {
   sobreAbierto = true;
   agarre = null;
   vibrar();
+  inicioHistoria = performance.now();
   empezarCancion();
   if (!esperandoToqueCancion) pista.textContent = "";
   abrecartas.style.transition = "transform 0.9s ease-in, opacity 0.9s";
@@ -836,13 +856,17 @@ async function irAlPuente() {
   if (cambio) mostrarCerillas();
 }
 
-cancion.addEventListener("timeupdate", () => {
+setInterval(() => {
   if (!historiaIniciada) return;
-  if (!enPuente && !ardiendo && cancion.currentTime >= Math.min(INICIO_PUENTE, (cancion.duration || Infinity) - 30)) irAlPuente();
+  const t = tiempoHistoria();
+  if (!enPuente && !ardiendo && t >= INICIO_PUENTE) irAlPuente();
+  if (t >= duracionHistoria() - 0.3) terminar();
   actualizarDesgaste();
-});
+}, 500);
 
-cancion.addEventListener("ended", terminar);
+cancion.addEventListener("ended", () => {
+  if (tiempoReal() >= duracionHistoria() - 20) terminar();
+});
 
 const cajetilla = document.getElementById("cajetilla");
 const raspador = cajetilla.querySelector(".raspador");

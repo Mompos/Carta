@@ -699,3 +699,27 @@ body.puente-activo #pista {
   margin: 0;
   pointer-events: none;
 }
+
+.fin {
+  padding: 0 calc(24px + env(safe-area-inset-right)) 0 calc(24px + env(safe-area-inset-left));
+  text-align: center;
+}
+
+.fin-final {
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.fin-frase {
+  max-width: 30em;
+  font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
+  font-size: 26px;
+  line-height: 1.3;
+}
+
+.fin-datos {
+  font-size: 13px;
+  opacity: 0.5;
+}

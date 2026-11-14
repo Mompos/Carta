@@ -110,13 +110,24 @@ const sonido = (() => {
   return {
     iniciar,
 
-    pluma(fuerza) {
-      const c = continuo("pluma", Math.min(0.32, 0.07 * fuerza), "bandpass", 3600, 1.3);
-      if (c) c.f.frequency.setTargetAtTime(azar(2800, 4600), ac.currentTime, 0.03);
+    pluma(rabia) {
+      const c = continuo("pluma", 0.04 + 0.3 * rabia, "bandpass", 3600, 1.3);
+      if (!c) return;
+      const centro = 4300 - 2000 * rabia;
+      c.f.frequency.setTargetAtTime(azar(centro * 0.85, centro * 1.15), ac.currentTime, 0.03);
+      c.f.Q.setTargetAtTime(2.2 - 1.6 * rabia, ac.currentTime, 0.05);
+      if (rabia > 0.65 && Math.random() < 0.25 * rabia) {
+        rafaga({ dur: azar(0.01, 0.03), tipo: "highpass", f: azar(2500, 5000), nivel: 0.1 + 0.2 * rabia });
+      }
     },
 
-    goma(fuerza) {
-      continuo("goma", Math.min(0.4, 0.09 * fuerza), "bandpass", 850, 0.8);
+    goma(rabia) {
+      const c = continuo("goma", 0.05 + 0.35 * rabia, "bandpass", 850, 0.8);
+      if (c) c.f.frequency.setTargetAtTime(650 + 700 * rabia, ac.currentTime, 0.05);
+    },
+
+    rasgon() {
+      rafaga({ dur: 0.18, tipo: "bandpass", f: 1200, f2: 3500, q: 0.8, nivel: 0.35 });
     },
 
     cera() {
@@ -143,9 +154,13 @@ const sonido = (() => {
       rafaga({ dur: azar(0.02, 0.07), tipo: "bandpass", f: azar(1500, 5500), q: 2, nivel: 0.06 + 0.22 * avance });
     },
 
-    arrugar() {
-      for (let i = 0; i < 22; i++) rafaga({ dur: azar(0.02, 0.08), tipo: "bandpass", f: azar(1200, 6000), q: 2, nivel: azar(0.15, 0.4), retraso: azar(0, 0.65) });
-      rafaga({ dur: 0.4, tipo: "lowpass", f: 900, f2: 300, nivel: 0.15, retraso: 0.7 });
+    arrugar(furia = 0.4) {
+      const duracion = 0.75 - 0.35 * furia;
+      const golpes = Math.round(14 + 26 * furia);
+      for (let i = 0; i < golpes; i++) {
+        rafaga({ dur: azar(0.02, 0.08), tipo: "bandpass", f: azar(1200, 6000), q: 2, nivel: azar(0.1, 0.25 + 0.3 * furia), retraso: azar(0, duracion) });
+      }
+      rafaga({ dur: 0.4, tipo: "lowpass", f: 900, f2: 300, nivel: 0.1 + 0.15 * furia, retraso: duracion + 0.05 });
     },
 
     pagina() {
@@ -157,9 +172,11 @@ const sonido = (() => {
       rafaga({ dur: 0.05, tipo: "bandpass", f: 1800, q: 1.5, nivel: 0.12, retraso: 0.45 });
     },
 
-    rasgar() {
-      rafaga({ dur: 0.55, tipo: "bandpass", f: 700, f2: 3200, q: 0.9, nivel: 0.4, ataque: 0.02 });
-      for (let i = 0; i < 14; i++) rafaga({ dur: azar(0.01, 0.04), tipo: "highpass", f: azar(2000, 4500), nivel: azar(0.08, 0.25), retraso: azar(0, 0.5) });
+    rasgar(furia = 0.3) {
+      const dur = 0.8 - 0.4 * furia;
+      rafaga({ dur, tipo: "bandpass", f: 700, f2: 3200, q: 1.4 - 0.8 * furia, nivel: 0.2 + 0.35 * furia, ataque: 0.02 });
+      const chasquidos = Math.round(6 + 20 * furia);
+      for (let i = 0; i < chasquidos; i++) rafaga({ dur: azar(0.01, 0.04), tipo: "highpass", f: azar(2000, 4500), nivel: azar(0.05, 0.1 + 0.25 * furia), retraso: azar(0, dur) });
     },
 
     encender() {
@@ -171,10 +188,10 @@ const sonido = (() => {
       rafaga({ dur: 0.35, tipo: "lowpass", f: 1200, f2: 300, nivel: 0.15, ataque: 0.03 });
     },
 
-    fuego(intensidad) {
-      fijar("fuego", 0.08 + 0.22 * intensidad, "lowpass", 450, 0.5);
-      if (Math.random() < 0.12 + 0.4 * intensidad) {
-        rafaga({ dur: azar(0.008, 0.035), tipo: "highpass", f: azar(1800, 5000), nivel: azar(0.08, 0.1 + 0.3 * intensidad) });
+    fuego(intensidad, furia = 0.3) {
+      fijar("fuego", (0.08 + 0.22 * intensidad) * (0.7 + 0.6 * furia), "lowpass", 450 + 400 * furia, 0.5);
+      if (Math.random() < (0.12 + 0.4 * intensidad) * (0.6 + 0.8 * furia)) {
+        rafaga({ dur: azar(0.008, 0.035), tipo: "highpass", f: azar(1800, 5000), nivel: azar(0.08, 0.1 + 0.3 * intensidad + 0.15 * furia) });
       }
     },
 

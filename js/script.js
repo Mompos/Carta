@@ -27,6 +27,55 @@ const quemado = document.getElementById("quemado");
 const qctx = quemado.getContext("2d");
 const cancion = document.getElementById("cancion");
 
+const FINALES = {
+  intacta: {
+    titulo: "Casi intacta",
+    frase: "Apenas la tocaste. Tal vez todavía la quieres; tal vez ya no duele.",
+  },
+  calma: {
+    titulo: "Borrada con calma",
+    frase: "La borraste despacio, como quien apaga una luz. Lo que se olvida en paz deja menos ceniza.",
+  },
+  rabia: {
+    titulo: "Destrozada con rabia",
+    frase: "La rompiste con las mismas manos que la escribieron. El odio también es una forma de recordar.",
+  },
+  sinLeer: {
+    titulo: "Quemada sin leer",
+    frase: "La quemaste sin mirar atrás. Hay cartas que no se leen: se sobreviven.",
+  },
+};
+
+const registro = {
+  rabiaSuma: 0,
+  rabiaTiempo: 0,
+  tachadas: 0,
+  borradas: 0,
+  cortes: 0,
+  arrugadas: 0,
+  volteos: 0,
+  msReverso: 0,
+  inicioReverso: 0,
+  quemada: false,
+  quemoSinLeer: false,
+};
+
+function anotarRabia(rabia, ms) {
+  registro.rabiaSuma += rabia * ms;
+  registro.rabiaTiempo += ms;
+}
+
+function rabiaMedia() {
+  return registro.rabiaTiempo ? registro.rabiaSuma / registro.rabiaTiempo : 0;
+}
+
+function colorTinta(rabia) {
+  const r = Math.round(40 - 32 * rabia);
+  const g = Math.round(52 - 43 * rabia);
+  const b = Math.round(95 - 77 * rabia);
+  return `rgba(${r},${g},${b},${(0.5 + 0.47 * rabia).toFixed(2)})`;
+}
+
 const DPR = Math.min(2, window.devicePixelRatio || 1);
 const MAX_PARTICULAS = 180;
 
@@ -188,21 +237,50 @@ function dibujarTramo(puntos, i) {
   const inicio = i === 1 ? b : medio(puntos[i - 2], b);
   const fin = medio(b, c);
   ctx.lineWidth = c[2];
+  ctx.strokeStyle = colorTinta(c[3] ?? 0.5);
   ctx.beginPath();
   ctx.moveTo(inicio[0], inicio[1]);
   ctx.quadraticCurveTo(b[0], b[1], fin[0], fin[1]);
   ctx.stroke();
 }
 
-function borrarEn(x, y, r) {
+function borrarEn(x, y, r, rabia = 0.3) {
   ctx.globalCompositeOperation = "destination-out";
-  circuloDifuso(ctx, x, y, r, "rgba(0,0,0,0.45)", "rgba(0,0,0,0)");
+  circuloDifuso(ctx, x, y, r, `rgba(0,0,0,${(0.3 + 0.35 * rabia).toFixed(2)})`, "rgba(0,0,0,0)");
   ctx.globalCompositeOperation = "source-over";
-  circuloDifuso(ctx, x, y, r, "rgba(110,95,70,0.025)", "rgba(110,95,70,0)");
+  circuloDifuso(ctx, x, y, r, `rgba(110,95,70,${(0.02 + 0.07 * rabia).toFixed(3)})`, "rgba(110,95,70,0)");
+}
+
+function dibujarRasgon(puntos) {
+  ctx.lineCap = "round";
+  ctx.strokeStyle = FONDO;
+  ctx.lineWidth = Math.max(1.5, fuente * 0.09);
+  ctx.beginPath();
+  puntos.forEach(([x, y], i) => (i ? ctx.lineTo(x * ancho, y * ancho) : ctx.moveTo(x * ancho, y * ancho)));
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255, 250, 235, 0.7)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  puntos.forEach(([x, y], i) => (i ? ctx.lineTo(x * ancho + 1.5, y * ancho + 1.5) : ctx.moveTo(x * ancho + 1.5, y * ancho + 1.5)));
+  ctx.stroke();
+}
+
+function rasgarPapel(x, y) {
+  const largo = fuente * (0.8 + Math.random() * 0.8);
+  const angulo = Math.random() * Math.PI;
+  const puntos = [];
+  for (let i = 0; i <= 5; i++) {
+    const d = (i / 5 - 0.5) * largo;
+    const quiebre = (Math.random() - 0.5) * fuente * 0.25;
+    puntos.push([(x + Math.cos(angulo) * d - Math.sin(angulo) * quiebre) / ancho, (y + Math.sin(angulo) * d + Math.cos(angulo) * quiebre) / ancho]);
+  }
+  trazos.push({ tipo: "rasgon", puntos });
+  dibujarRasgon(puntos);
+  sonido.rasgon();
 }
 
 function enPixeles(puntos) {
-  return puntos.map(([x, y, w]) => [x * ancho, y * ancho, w * ancho]);
+  return puntos.map(([x, y, w, rabia]) => [x * ancho, y * ancho, w * ancho, rabia]);
 }
 
 function redibujar() {
@@ -211,8 +289,10 @@ function redibujar() {
     if (t.tipo === "linea") {
       const pix = enPixeles(t.puntos);
       for (let i = 1; i < pix.length; i++) dibujarTramo(pix, i);
+    } else if (t.tipo === "rasgon") {
+      dibujarRasgon(t.puntos);
     } else {
-      borrarEn(t.x * ancho, t.y * ancho, t.r * ancho);
+      borrarEn(t.x * ancho, t.y * ancho, t.r * ancho, t.rabia);
     }
   });
 }
@@ -223,8 +303,8 @@ function nuevaLinea() {
   return t;
 }
 
-function agregarPunto(t, x, y, grosor) {
-  t.puntos.push([x / ancho, y / ancho, grosor / ancho]);
+function agregarPunto(t, x, y, grosor, rabia = 0.5) {
+  t.puntos.push([x / ancho, y / ancho, grosor / ancho, rabia]);
   const pix = enPixeles(t.puntos.slice(-3));
   dibujarTramo(pix, pix.length - 1);
 }
@@ -238,24 +318,38 @@ function palabrasEn(x, y, holgura) {
   );
 }
 
-function tachar(p) {
+function tachar(p, rabia = 0.5) {
   p.tachada = true;
   p.el.classList.add("tachada");
+  registro.tachadas++;
   vibrar();
   queueMicrotask(revisarPagina);
   const t = nuevaLinea();
-  const grosor = fuente * 0.13;
-  const dientes = Math.max(4, Math.round(p.w / (fuente * 0.18)));
-  const arriba = p.y + p.h * 0.25;
-  const abajo = p.y + p.h * 0.8;
-  for (let pasada = 0; pasada < 2; pasada++) {
+  const grosor = fuente * (0.07 + 0.12 * rabia);
+  const dientes = Math.max(4, Math.round(p.w / (fuente * (0.24 - 0.1 * rabia))));
+  const desorden = fuente * (0.04 + 0.3 * rabia);
+  const arriba = p.y + p.h * (0.3 - 0.2 * rabia);
+  const abajo = p.y + p.h * (0.75 + 0.2 * rabia);
+  const pasadas = rabia > 0.6 ? 3 : 2;
+  for (let pasada = 0; pasada < pasadas; pasada++) {
     for (let i = 0; i <= dientes; i++) {
-      const k = pasada ? dientes - i : i;
-      const x = p.x + (p.w * k) / dientes + (Math.random() - 0.5) * fuente * 0.08;
-      const y = ((i + pasada) % 2 ? arriba : abajo) + (Math.random() - 0.5) * fuente * 0.1;
-      agregarPunto(t, x, y, grosor);
+      const k = pasada % 2 ? dientes - i : i;
+      const x = p.x + (p.w * k) / dientes + (Math.random() - 0.5) * desorden;
+      const y = ((i + pasada) % 2 ? arriba : abajo) + (Math.random() - 0.5) * desorden;
+      agregarPunto(t, x, y, grosor, rabia);
     }
   }
+}
+
+function medirRabia(dedo, a, b) {
+  const dt = Math.max(4, b.t - a.t);
+  const velocidad = Math.hypot(b.x - a.x, b.y - a.y) / dt;
+  const rapidez = Math.min(1, Math.max(0, (velocidad - 0.2) / 1.6));
+  const insistencia = Math.min(1, (dedo.giros || 0) / 6);
+  const objetivo = 0.7 * rapidez + 0.3 * insistencia;
+  dedo.rabia += (objetivo - dedo.rabia) * Math.min(1, dt / 70);
+  anotarRabia(dedo.rabia, Math.min(100, dt));
+  return dedo.rabia;
 }
 
 function intensidad(a, b) {
@@ -265,35 +359,39 @@ function intensidad(a, b) {
 }
 
 function rayar(dedo, a, b) {
-  const { distancia, fuerza } = intensidad(a, b);
+  const { distancia } = intensidad(a, b);
+  const rabia = medirRabia(dedo, a, b);
   const presionLapiz = b.tipo === "pen" && b.presion > 0 ? 0.5 + b.presion : 1;
-  const grosor = fuente * (0.06 + 0.025 * fuerza) * presionLapiz;
+  const grosor = fuente * (0.035 + 0.12 * rabia) * presionLapiz;
   if (!dedo.trazo) {
     dedo.trazo = nuevaLinea();
-    agregarPunto(dedo.trazo, a.x, a.y, grosor);
+    agregarPunto(dedo.trazo, a.x, a.y, grosor, rabia);
   }
-  sonido.pluma(fuerza);
-  const temblor = fuente * 0.05;
-  agregarPunto(dedo.trazo, b.x + (Math.random() - 0.5) * temblor, b.y + (Math.random() - 0.5) * temblor, grosor);
+  sonido.pluma(rabia);
+  const temblor = fuente * (0.02 + 0.3 * rabia);
+  agregarPunto(dedo.trazo, b.x + (Math.random() - 0.5) * temblor, b.y + (Math.random() - 0.5) * temblor, grosor, rabia);
+  if (rabia > 0.8 && Math.random() < 0.035 && trazos.filter((t) => t.tipo === "rasgon").length < 14) rasgarPapel(b.x, b.y);
 
   const holgura = Math.max(fuente * 0.15, b.contacto * 0.25);
   palabrasEn(b.x, b.y, holgura).forEach((p) => {
     if (p.tachada) return;
-    p.raya += (distancia * fuerza) / (Math.max(p.w, fuente) * 4);
-    if (p.raya >= 1) tachar(p);
+    p.raya += (distancia * (0.6 + 1.6 * rabia)) / (Math.max(p.w, fuente) * 4);
+    if (p.raya >= 1) tachar(p, rabia);
   });
 }
 
-function borrar(a, b) {
-  const { distancia, fuerza } = intensidad(a, b);
-  sonido.goma(fuerza);
-  const r = Math.max(fuente * 0.9, b.contacto * 0.6);
+function borrar(dedo, a, b) {
+  const { distancia } = intensidad(a, b);
+  const rabia = medirRabia(dedo, a, b);
+  const fuerza = 0.6 + 1.6 * rabia;
+  sonido.goma(rabia);
+  const r = Math.max(fuente * (0.7 + 0.6 * rabia), b.contacto * 0.6);
   const pasos = Math.max(1, Math.ceil(distancia / (r * 0.35)));
   for (let i = 1; i <= pasos; i++) {
     const x = a.x + ((b.x - a.x) * i) / pasos;
     const y = a.y + ((b.y - a.y) * i) / pasos;
-    trazos.push({ tipo: "goma", x: x / ancho, y: y / ancho, r: r / ancho });
-    borrarEn(x, y, r);
+    trazos.push({ tipo: "goma", x: x / ancho, y: y / ancho, r: r / ancho, rabia });
+    borrarEn(x, y, r, rabia);
   }
 
   palabrasEn(b.x, b.y, r * 0.6).forEach((p) => {
@@ -302,6 +400,7 @@ function borrar(a, b) {
     if (p.borrado >= 0.8) {
       p.borrada = true;
       p.el.classList.add("borrada");
+      registro.borradas++;
       vibrar();
     }
   });
@@ -341,6 +440,7 @@ function clasificar(dedo) {
   const minimo = fuente * 0.3;
   const gx = giros(r.map((p) => p.x), minimo);
   const gy = giros(r.map((p) => p.y), minimo);
+  dedo.giros = Math.max(gx, gy);
   const umbral = fuente * 2;
 
   if (gx >= 2 && sx > umbral && sx > sy * 1.5) return "rayar";
@@ -354,7 +454,7 @@ function aplicar(dedo, a, b) {
   if (animando || volteada) return;
   tiempoTocando += Math.min(100, b.t - a.t);
   if (dedo.modo === "rayar") rayar(dedo, a, b);
-  else if (dedo.modo === "borrar") borrar(a, b);
+  else if (dedo.modo === "borrar") borrar(dedo, a, b);
 }
 
 let inicioHistoria = 0;
@@ -557,20 +657,25 @@ async function arrugar() {
   soltarTodos();
   pista.textContent = "…";
   vibrar();
-  sonido.arrugar();
+  const furia = Math.min(1, rabiaMedia() * 1.3);
+  registro.arrugadas++;
+  anotarRabia(furia, 1500);
+  sonido.arrugar(furia);
   arrugas.style.opacity = 1;
+  const apretada = (0.55 - 0.25 * furia).toFixed(2);
+  const giro = Math.round(-30 - 60 * furia);
 
   await carta.animate(
-    [desde, { clipPath: bola, transform: "scale(0.5) rotate(-30deg)" }],
-    { duration: 650, easing: "cubic-bezier(0.5, 0, 0.3, 1)", fill: "forwards" }
+    [desde, { clipPath: bola, transform: `scale(${apretada}) rotate(${giro}deg)` }],
+    { duration: 750 - 350 * furia, easing: "cubic-bezier(0.5, 0, 0.3, 1)", fill: "forwards" }
   ).finished;
   await carta.animate(
     [
-      { clipPath: bola, transform: "scale(0.5) rotate(-30deg)" },
-      { clipPath: bola, transform: "translateY(-8%) scale(0.42) rotate(40deg)", offset: 0.3 },
-      { clipPath: bola, transform: "translateY(120vh) scale(0.38) rotate(280deg)" },
+      { clipPath: bola, transform: `scale(${apretada}) rotate(${giro}deg)` },
+      { clipPath: bola, transform: `translateY(-8%) scale(${apretada * 0.85}) rotate(${giro + 70}deg)`, offset: 0.3 },
+      { clipPath: bola, transform: `translateY(120vh) scale(${apretada * 0.75}) rotate(${giro + 300 + 400 * furia}deg)` },
     ],
-    { duration: 950, easing: "ease-in", fill: "forwards" }
+    { duration: 1050 - 450 * furia, easing: "ease-in", fill: "forwards" }
   ).finished;
 
   limpiarForma();
@@ -641,7 +746,7 @@ carta.addEventListener("pointerdown", (e) => {
     medirOrigen();
   }
   const p = punto(e);
-  dedos.set(e.pointerId, { recorrido: [p], modo: null, trazo: null, inicio: p, ultimo: p, camino: 0, frotado: false });
+  dedos.set(e.pointerId, { recorrido: [p], modo: null, trazo: null, inicio: p, ultimo: p, camino: 0, frotado: false, rabia: 0.3, giros: 0 });
   if (dedos.size === 1 && !enPuente) iniciarPresion(e.pointerId, p);
   else cancelarPresion();
 });
@@ -681,7 +786,8 @@ function revisarDeslizamiento(dedo, fin) {
     if (volteada || nivelDesgaste() >= 1) voltearCarta();
     else if (!enPuente) avisar("Todavía no está gastada para voltearla");
   } else if (!volteada && !enPuente) {
-    partirCarta(ini, fin);
+    const rapidez = distancia / Math.max(60, duracion);
+    partirCarta(ini, fin, Math.min(1, Math.max(0, (rapidez - 0.5) / 2.5)));
   }
 }
 
@@ -697,6 +803,10 @@ async function voltearCarta() {
   ).finished;
   volteada = !volteada;
   carta.classList.toggle("volteada", volteada);
+  if (volteada) {
+    registro.volteos++;
+    registro.inicioReverso = performance.now();
+  } else cerrarReverso();
   if (volteada) mostrarCerillas();
   else ocultarCerillas();
   await carta.animate(
@@ -706,6 +816,12 @@ async function voltearCarta() {
   carta.getAnimations().forEach((a) => a.cancel());
   animando = false;
   actualizarPista();
+}
+
+function cerrarReverso() {
+  if (!registro.inicioReverso) return;
+  registro.msReverso += performance.now() - registro.inicioReverso;
+  registro.inicioReverso = 0;
 }
 
 function lineasDeTexto() {
@@ -759,11 +875,13 @@ function unir(izquierda, derecha) {
   return izquierda.texto + (pegadas ? "" : " ") + derecha.texto;
 }
 
-async function partirCarta(ini, fin) {
+async function partirCarta(ini, fin, furia = 0.3) {
   animando = true;
   cancelarPresion();
   soltarTodos();
-  sonido.rasgar();
+  registro.cortes++;
+  anotarRabia(furia, 2000);
+  sonido.rasgar(furia);
   medir();
   const lineas = lineasDeTexto();
   if (lineas.length < 2) {
@@ -810,11 +928,18 @@ async function partirCarta(ini, fin) {
   bordes.push(alto);
   const puntosIzq = [[0, 0]];
   const puntosDer = [[ancho, 0], [ancho, alto]];
+  const borde = [];
   mitades.forEach((m, i) => {
-    puntosIzq.push([m.x, bordes[i]], [m.x, bordes[i + 1]]);
+    const tramos = 1 + Math.round(furia * 4);
+    for (let k = 0; k <= tramos; k++) {
+      const y = bordes[i] + ((bordes[i + 1] - bordes[i]) * k) / tramos;
+      const desvio = k === 0 || k === tramos ? 0 : (Math.random() - 0.5) * fuente * 0.6 * furia;
+      borde.push([m.x + desvio, y]);
+    }
   });
+  borde.forEach((pt) => puntosIzq.push(pt));
   puntosIzq.push([0, alto]);
-  for (let i = mitades.length - 1; i >= 0; i--) puntosDer.push([mitades[i].x, bordes[i + 1]], [mitades[i].x, bordes[i]]);
+  for (let i = borde.length - 1; i >= 0; i--) puntosDer.push(borde[i]);
   const poligono = (pts) => `polygon(${pts.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(", ")})`;
 
   const caja = carta.getBoundingClientRect();
@@ -830,20 +955,23 @@ async function partirCarta(ini, fin) {
   document.body.appendChild(derecha);
   carta.style.clipPath = poligono(puntosIzq);
 
-  const salto = lineas[1].y - lineas[0].y;
-  carta.animate([{ transform: "none" }, { transform: "translateX(-8px) rotate(-0.6deg)" }], { duration: 350, fill: "forwards" });
+  const saltoLineas = furia > 0.6 && lineas.length > 3 ? 2 : 1;
+  const salto = (lineas[1].y - lineas[0].y) * saltoLineas;
+  const abre = Math.round(10 + 30 * furia);
+  const inclina = (0.5 + 4 * furia).toFixed(1);
+  carta.animate([{ transform: "none" }, { transform: `translateX(${-abre / 2}px) rotate(${-inclina / 2}deg)` }], { duration: 350, fill: "forwards" });
   await derecha.animate(
     [
       { transform: "none" },
-      { transform: "translate(16px, 0) rotate(0.8deg)", offset: 0.35 },
-      { transform: `translate(16px, ${-salto}px) rotate(0.8deg)`, offset: 0.75 },
-      { transform: `translate(6px, ${-salto}px)` },
+      { transform: `translate(${abre}px, 0) rotate(${inclina}deg)`, offset: 0.35 },
+      { transform: `translate(${abre}px, ${-salto}px) rotate(${inclina}deg)`, offset: 0.75 },
+      { transform: `translate(${Math.round(abre / 3)}px, ${-salto}px) rotate(${(inclina / 4).toFixed(1)}deg)` },
     ],
-    { duration: 1300, easing: "ease-in-out", fill: "forwards" }
+    { duration: 1500 - 700 * furia, easing: "ease-in-out", fill: "forwards" }
   ).finished;
-  await esperar(900);
+  await esperar(900 - 400 * furia);
 
-  const nuevas = mitades.map((m, i) => unir(m.izquierda, mitades[(i + 1) % mitades.length].derecha));
+  const nuevas = mitades.map((m, i) => unir(m.izquierda, mitades[(i + saltoLineas) % mitades.length].derecha));
   const html = nuevas.filter(Boolean).map((t) => `<p>${escapar(t)}</p>`).join("");
 
   await Promise.all([
@@ -1247,7 +1375,7 @@ function soltarCerilla(e) {
   } else if (Math.hypot(vx, vy) > 0.35) {
     lanzarCerilla(vx, vy);
   } else if (tocaObjetivo(fosforo.x, fosforo.y)) {
-    encenderPuente(fosforo.x, fosforo.y);
+    encenderPuente(fosforo.x, fosforo.y, 0);
   } else {
     apagarCerilla();
   }
@@ -1264,6 +1392,7 @@ function lanzarCerilla(vx, vy) {
     vy = (vy / v) * tope;
   }
   fosforo.vuelo = true;
+  const furiaLanzamiento = Math.min(1, Math.max(0, (Math.hypot(vx, vy) - 0.35) / 2));
   let anterior = performance.now();
   const inicio = anterior;
   const giro = vx >= 0 ? 1 : -1;
@@ -1277,7 +1406,7 @@ function lanzarCerilla(vx, vy) {
     fosforo.rot += giro * dt * 0.5;
     pintarCerilla();
     if (tocaObjetivo(fosforo.x, fosforo.y)) {
-      encenderPuente(fosforo.x, fosforo.y);
+      encenderPuente(fosforo.x, fosforo.y, furiaLanzamiento);
       return;
     }
     const fuera = fosforo.x < -50 || fosforo.x > window.innerWidth + 50 || fosforo.y < -80 || fosforo.y > window.innerHeight + 50;
@@ -1303,10 +1432,15 @@ function apagarCerilla() {
 
 let fuego = null;
 
-function encenderPuente(x, y) {
+function encenderPuente(x, y, furia = 0.3) {
   if (ardiendo) return;
   ardiendo = true;
   quemaReverso = volteada;
+  cerrarReverso();
+  if (volteada) registro.inicioReverso = 0;
+  registro.quemada = true;
+  if (registro.msReverso < 4000) registro.quemoSinLeer = true;
+  anotarRabia(furia, 1500);
   soltarTodos();
   cerilla.hidden = true;
   vibrar();
@@ -1322,6 +1456,7 @@ function encenderPuente(x, y) {
     fases: [Math.random() * 6.3, Math.random() * 6.3, Math.random() * 6.3],
     particulas: [],
     consumido: false,
+    furia,
   };
   requestAnimationFrame(arder);
 }
@@ -1358,12 +1493,12 @@ function arder(ahora) {
   fuego.ultimo = ahora;
   const diagonal = Math.hypot(Math.max(fuego.x, ancho - fuego.x), Math.max(fuego.y, alto - fuego.y));
   const empuje = fuego.r > diagonal ? 2.5 : 1;
-  fuego.r += dt * ancho * (0.00005 + 0.00008 * Math.min(1, (fuego.r / diagonal) * 1.5)) * empuje;
+  fuego.r += dt * ancho * (0.00005 + 0.00008 * Math.min(1, (fuego.r / diagonal) * 1.5)) * empuje * (0.7 + 0.9 * fuego.furia);
   if (fuego.r * 0.64 > diagonal + fuente * 2 && !fuego.consumido) {
     fuego.consumido = true;
     sonido.apagarFuego();
   }
-  if (!fuego.consumido) sonido.fuego(Math.min(1, fuego.r / diagonal));
+  if (!fuego.consumido) sonido.fuego(Math.min(1, fuego.r / diagonal), fuego.furia);
 
   qctx.clearRect(0, 0, ancho, alto);
   if (fuego.consumido) {
@@ -1463,9 +1598,30 @@ async function finQuemado() {
 
 const fin = document.getElementById("fin");
 
+function elegirFinal() {
+  const media = rabiaMedia();
+  const destrozos = registro.tachadas + registro.cortes * 6 + registro.arrugadas * 6;
+  const gestos = registro.tachadas + registro.borradas + (registro.cortes + registro.arrugadas) * 8;
+  if (gestos < 8 && !registro.quemada) return "intacta";
+  if (registro.quemada && registro.quemoSinLeer) return "sinLeer";
+  if (media >= 0.5 || (media >= 0.35 && destrozos > registro.borradas * 1.5)) return "rabia";
+  return "calma";
+}
+
 function terminar() {
   if (!fin.hidden) return;
   clearInterval(reloj);
+  cerrarReverso();
+  const final = FINALES[elegirFinal()];
+  fin.querySelector(".fin-final").textContent = final.titulo;
+  fin.querySelector(".fin-frase").textContent = final.frase;
+  const contar = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+  fin.querySelector(".fin-datos").textContent = [
+    contar(registro.tachadas, "palabra tachada", "palabras tachadas"),
+    contar(registro.borradas, "borrada", "borradas"),
+    contar(registro.cortes, "corte", "cortes"),
+    `rabia ${Math.round(rabiaMedia() * 100)}%`,
+  ].join(" · ");
   fin.hidden = false;
   pista.textContent = "";
   fin.addEventListener("click", () => location.reload(), { once: true });

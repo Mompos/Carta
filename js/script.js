@@ -16,10 +16,12 @@ const PISTA_REVERSO = "Desliza hacia arriba para volver · Raspa una cerilla y l
 const PISTA_GASTADA = "La carta ya está gastada: desliza hacia arriba para voltearla";
 const ESPERA_ARRUGAR = 1200;
 const TIEMPO_ARRUGAR = 10000;
+const INICIO_FOTOS = 220;
 const INICIO_PUENTE = 280;
 const DURACION_CANCION = 343.6;
 const FONDO = "#2b2622";
-const PISTA_INICIAL = "Tacha todo (↔) para avanzar · Borra todo (↕) para volver a empezar · Desliza hacia abajo para cortarla · Mantén presionado para arrugar";
+const PISTA_INICIAL = "Desliza → para pasar la página · Frota ↔ para tachar, ↕ para borrar · Desliza ↓ para cortar · Mantén presionado para arrugar";
+const PISTA_ULTIMA = "Última página: desliza → para ver las fotos";
 const PISTA_PUENTE = "Raspa una cerilla en la caja y lánzala al puente";
 const paginas = [...document.querySelectorAll("#paginas .pagina:not(.puente)")].map((s) => s.innerHTML);
 const paginaPuente = document.querySelector("#paginas .pagina.puente").innerHTML;
@@ -105,6 +107,7 @@ let trazos = [];
 let tiempoTocando = 0;
 let marcaDesgaste = 0;
 let volteada = false;
+let fotosQuemadas = false;
 let quemaReverso = false;
 let animando = false;
 let presion = null;
@@ -522,7 +525,8 @@ function actualizarPista() {
   else if (borrando) ponerPista("Borrando…");
   else if (volteada) ponerPista(PISTA_REVERSO);
   else if (enPuente) ponerPista(PISTA_PUENTE);
-  else if (desgaste >= 1) ponerPista(PISTA_GASTADA);
+  else if (desgaste >= 1 && !fotosQuemadas) ponerPista(PISTA_GASTADA);
+  else if (actual === paginas.length - 1) ponerPista(PISTA_ULTIMA);
   else ponerPista(PISTA_INICIAL);
 }
 
@@ -679,39 +683,51 @@ async function arrugar() {
   ).finished;
 
   limpiarForma();
-  cargarPagina("puente");
+  if (fotosQuemadas) {
+    cargarPagina("puente");
+  } else {
+    cargarPagina(actual);
+    mostrarReverso();
+  }
   await entrar([{ opacity: 0, transform: "translateY(18px) scale(0.97)" }, { opacity: 1, transform: "none" }]);
   mostrarCerillas();
 }
 
-function revisarPagina() {
-  if (enPuente || animando || !palabras.length) return;
-  if (palabras.every((p) => p.borrada)) {
-    cambiarPagina(0);
-  } else if (palabras.every((p) => p.tachada || p.borrada)) {
-    if (actual + 1 < paginas.length) cambiarPagina(actual + 1);
-    else irAlPuente();
-  }
+function mostrarReverso() {
+  volteada = true;
+  carta.classList.add("volteada");
+  registro.volteos++;
+  registro.inicioReverso = performance.now();
 }
 
-async function cambiarPagina(destino) {
+async function irAFotos() {
+  if (volteada || enPuente || fotosQuemadas || animando) return;
+  await voltearCarta();
+}
+
+function revisarPagina() {
+  if (enPuente || animando || !palabras.length) return;
+  if (palabras.every((p) => p.borrada)) cambiarPagina(0);
+}
+
+async function cambiarPagina(destino, sentido = 1, pausa = 450) {
   if (animando) return false;
   animando = true;
   cancelarPresion();
   soltarTodos();
   vibrar();
-  await new Promise((r) => setTimeout(r, 450));
+  if (pausa) await esperar(pausa);
   sonido.pagina();
   await carta.animate(
-    [{ transform: "none", opacity: 1 }, { transform: "translateX(-115%) rotate(-10deg)", opacity: 0 }],
-    { duration: 700, easing: "ease-in", fill: "forwards" }
+    [{ transform: "none", opacity: 1 }, { transform: `translateX(${115 * sentido}%) rotate(${10 * sentido}deg)`, opacity: 0 }],
+    { duration: 600, easing: "ease-in", fill: "forwards" }
   ).finished;
 
   limpiarForma();
   carta.style.opacity = 0;
   cargarPagina(destino);
   carta.style.opacity = "";
-  await entrar([{ opacity: 0, transform: "translateX(40px) rotate(3deg)" }, { opacity: 1, transform: "none" }]);
+  await entrar([{ opacity: 0, transform: `translateX(${-40 * sentido}px) rotate(${-3 * sentido}deg)` }, { opacity: 1, transform: "none" }]);
   return true;
 }
 
@@ -723,6 +739,7 @@ async function entrar(cuadros) {
 
 function cargarPagina(i, contenido) {
   enPuente = i === "puente";
+  if (volteada) cerrarReverso();
   volteada = false;
   carta.classList.remove("volteada");
   document.body.classList.toggle("puente-activo", enPuente);
@@ -780,7 +797,20 @@ function revisarDeslizamiento(dedo, fin) {
   const distancia = Math.hypot(dx, dy);
   const duracion = fin.t - ini.t;
   const recto = dedo.camino < distancia * 1.3 + 10;
-  if (!recto || duracion > 900 || Math.abs(dy) < Math.abs(dx) * 1.6 || Math.abs(dy) < alto * 0.4) return;
+  if (!recto || duracion > 900) return;
+
+  if (Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(dx) > ancho * 0.35) {
+    if (volteada || enPuente) return;
+    if (dx > 0) {
+      if (actual + 1 < paginas.length) cambiarPagina(actual + 1, 1, 0);
+      else if (!fotosQuemadas) voltearCarta();
+      else irAlPuente();
+    } else if (actual > 0) {
+      cambiarPagina(actual - 1, -1, 0);
+    }
+    return;
+  }
+  if (Math.abs(dy) < Math.abs(dx) * 1.6 || Math.abs(dy) < alto * 0.4) return;
 
   if (dy < 0) {
     if (volteada || nivelDesgaste() >= 1) voltearCarta();
@@ -1270,6 +1300,7 @@ async function irAlPuente() {
 const reloj = setInterval(() => {
   if (!historiaIniciada) return;
   const t = tiempoHistoria();
+  if (!enPuente && !ardiendo && !fotosQuemadas && t >= INICIO_FOTOS) irAFotos();
   if (!enPuente && !ardiendo && t >= INICIO_PUENTE) irAlPuente();
   if (t >= duracionHistoria() - 0.3) terminar();
   actualizarDesgaste();
@@ -1596,14 +1627,14 @@ async function finQuemado() {
   fuego = null;
   ardiendo = false;
   quemaReverso = false;
-  tiempoTocando = 0;
-  marcaDesgaste = tiempoHistoria();
+  fotosQuemadas = true;
   ocultarCerillas();
   limpiarForma();
-  cargarPagina(0);
+  cargarPagina("puente");
   sonido.pagina();
   animando = true;
   await entrar([{ opacity: 0, transform: "translateY(18px) scale(0.97)" }, { opacity: 1, transform: "none" }]);
+  mostrarCerillas();
 }
 
 const fin = document.getElementById("fin");

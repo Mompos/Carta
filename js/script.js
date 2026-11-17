@@ -1289,20 +1289,30 @@ function pintarCerilla() {
   cerilla.style.transform = `translate(${fosforo.x - 4}px, ${fosforo.y - 5}px) rotate(${fosforo.rot}deg)`;
 }
 
+function quitarAnimaciones(el) {
+  el.getAnimations().forEach((a) => a.cancel());
+}
+
 function ocultarCerillas() {
+  quitarAnimaciones(cajetilla);
+  quitarAnimaciones(cerilla);
   cajetilla.hidden = true;
   cerilla.hidden = true;
   fosforo = null;
+  document.body.classList.remove("cerillas-visibles");
 }
 
 function mostrarCerillas() {
+  quitarAnimaciones(cajetilla);
   cajetilla.hidden = false;
-  cajetilla.animate([{ opacity: 0, transform: "translateY(20px)" }, { opacity: 1, transform: "none" }], { duration: 500 });
+  document.body.classList.add("cerillas-visibles");
   nuevaCerilla();
+  cajetilla.animate([{ opacity: 0, transform: "translateY(20px)" }, { opacity: 1, transform: "none" }], { duration: 500 });
 }
 
 function nuevaCerilla() {
-  if (ardiendo) return;
+  if (ardiendo || cajetilla.hidden || (!enPuente && !volteada)) return;
+  quitarAnimaciones(cerilla);
   const caja = cajetilla.getBoundingClientRect();
   fosforo = { x: caja.left + caja.width * 0.72, y: caja.top - 34, rot: 14, encendida: false, frote: 0, historial: [], arrastre: null, vuelo: false };
   cerilla.hidden = false;
@@ -1317,7 +1327,7 @@ function encenderCerilla() {
   cerilla.classList.add("encendida");
   vibrar();
   sonido.encender();
-  pista.textContent = "¡Lánzala al puente!";
+  pista.textContent = volteada ? "¡Lánzala a las fotos!" : "¡Lánzala al puente!";
 }
 
 function tocaObjetivo(x, y) {

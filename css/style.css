@@ -433,7 +433,7 @@ footer {
   background: repeating-linear-gradient(45deg, #4a2a1a 0 2px, #6b3f27 2px 4px);
 }
 
-body.puente-activo #pista {
+body.cerillas-visibles #pista {
   padding: 0 112px 0 0;
 }
 

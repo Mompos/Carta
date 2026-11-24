@@ -20,8 +20,8 @@ const INICIO_FOTOS = 220;
 const INICIO_PUENTE = 280;
 const DURACION_CANCION = 343.6;
 const FONDO = "#2b2622";
-const PISTA_INICIAL = "Desliza de izquierda a derecha → para pasar la página · Frota ↔ para tachar, ↕ para borrar · Desliza ↓ para cortar · Mantén presionado para arrugar";
-const PISTA_ULTIMA = "Última página: desliza de izquierda a derecha → para ver las fotos";
+const PISTA_INICIAL = "Desliza de derecha a izquierda ← para pasar la página · Frota ↔ para tachar, ↕ para borrar · Desliza ↓ para cortar · Mantén presionado para arrugar";
+const PISTA_ULTIMA = "Última página: desliza de derecha a izquierda ← para ver las fotos";
 const PISTA_PUENTE = "Raspa una cerilla en la caja y lánzala al puente";
 const paginas = [...document.querySelectorAll("#paginas .pagina:not(.puente)")].map((s) => s.innerHTML);
 const paginaPuente = document.querySelector("#paginas .pagina.puente").innerHTML;
@@ -707,10 +707,10 @@ async function irAFotos() {
 
 function revisarPagina() {
   if (enPuente || animando || !palabras.length) return;
-  if (palabras.every((p) => p.borrada)) cambiarPagina(0);
+  if (palabras.every((p) => p.borrada)) cambiarPagina(0, 1);
 }
 
-async function cambiarPagina(destino, sentido = 1, pausa = 450) {
+async function cambiarPagina(destino, sentido = -1, pausa = 450) {
   if (animando) return false;
   animando = true;
   cancelarPresion();
@@ -790,8 +790,8 @@ function soltar(e) {
 
 function pasaPagina(dx, dy, camino, duracion) {
   return (
-    dx > Math.max(70, ancho * 0.25) &&
-    dx > Math.abs(dy) * 1.3 &&
+    -dx > Math.max(70, ancho * 0.25) &&
+    -dx > Math.abs(dy) * 1.3 &&
     camino < Math.hypot(dx, dy) * 1.5 + 15 &&
     duracion <= 1500
   );
@@ -799,7 +799,7 @@ function pasaPagina(dx, dy, camino, duracion) {
 
 function pasarPagina() {
   if (volteada || enPuente || animando || ardiendo || !historiaIniciada) return;
-  if (actual + 1 < paginas.length) cambiarPagina(actual + 1, 1, 0);
+  if (actual + 1 < paginas.length) cambiarPagina(actual + 1, -1, 0);
   else if (!fotosQuemadas) voltearCarta();
   else irAlPuente();
 }

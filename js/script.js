@@ -20,8 +20,8 @@ const INICIO_FOTOS = 220;
 const INICIO_PUENTE = 280;
 const DURACION_CANCION = 343.6;
 const FONDO = "#2b2622";
-const PISTA_INICIAL = "Desliza → para pasar la página · Frota ↔ para tachar, ↕ para borrar · Desliza ↓ para cortar · Mantén presionado para arrugar";
-const PISTA_ULTIMA = "Última página: desliza → para ver las fotos";
+const PISTA_INICIAL = "Desliza de izquierda a derecha → para pasar la página · Frota ↔ para tachar, ↕ para borrar · Desliza ↓ para cortar · Mantén presionado para arrugar";
+const PISTA_ULTIMA = "Última página: desliza de izquierda a derecha → para ver las fotos";
 const PISTA_PUENTE = "Raspa una cerilla en la caja y lánzala al puente";
 const paginas = [...document.querySelectorAll("#paginas .pagina:not(.puente)")].map((s) => s.innerHTML);
 const paginaPuente = document.querySelector("#paginas .pagina.puente").innerHTML;
@@ -788,6 +788,22 @@ function soltar(e) {
   actualizarPista();
 }
 
+function pasaPagina(dx, dy, camino, duracion) {
+  return (
+    dx > Math.max(70, ancho * 0.25) &&
+    dx > Math.abs(dy) * 1.3 &&
+    camino < Math.hypot(dx, dy) * 1.5 + 15 &&
+    duracion <= 1500
+  );
+}
+
+function pasarPagina() {
+  if (volteada || enPuente || animando || ardiendo || !historiaIniciada) return;
+  if (actual + 1 < paginas.length) cambiarPagina(actual + 1, 1, 0);
+  else if (!fotosQuemadas) voltearCarta();
+  else irAlPuente();
+}
+
 function revisarDeslizamiento(dedo, fin) {
   if (dedo.frotado || animando || ardiendo) return;
   if (fosforo && (fosforo.vuelo || fosforo.arrastre)) return;
@@ -796,20 +812,13 @@ function revisarDeslizamiento(dedo, fin) {
   const dy = fin.y - ini.y;
   const distancia = Math.hypot(dx, dy);
   const duracion = fin.t - ini.t;
-  const recto = dedo.camino < distancia * 1.3 + 10;
-  if (!recto || duracion > 900) return;
-
-  if (Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(dx) > ancho * 0.35) {
-    if (volteada || enPuente) return;
-    if (dx > 0) {
-      if (actual + 1 < paginas.length) cambiarPagina(actual + 1, 1, 0);
-      else if (!fotosQuemadas) voltearCarta();
-      else irAlPuente();
-    } else if (actual > 0) {
-      cambiarPagina(actual - 1, -1, 0);
-    }
+  if (pasaPagina(dx, dy, dedo.camino, duracion)) {
+    pasarPagina();
     return;
   }
+
+  const recto = dedo.camino < distancia * 1.3 + 10;
+  if (!recto || duracion > 900) return;
   if (Math.abs(dy) < Math.abs(dx) * 1.6 || Math.abs(dy) < alto * 0.4) return;
 
   if (dy < 0) {
@@ -1022,6 +1031,39 @@ carta.addEventListener("lostpointercapture", soltar);
 carta.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 carta.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener("gesturestart", (e) => e.preventDefault());
+
+// El deslizamiento también cuenta si empieza en el margen, fuera de la hoja.
+let fuera = null;
+
+document.addEventListener("pointerdown", (e) => {
+  if (!historiaIniciada || !fin.hidden || dedos.size || fuera) return;
+  if (e.target.closest("#carta, #cerilla, #cajetilla")) return;
+  fuera = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: e.timeStamp, camino: 0 };
+});
+
+document.addEventListener("pointermove", (e) => {
+  if (!fuera || fuera.id !== e.pointerId) return;
+  fuera.camino += Math.hypot(e.clientX - fuera.x, e.clientY - fuera.y);
+  fuera.x = e.clientX;
+  fuera.y = e.clientY;
+});
+
+document.addEventListener("pointerup", (e) => {
+  if (!fuera || fuera.id !== e.pointerId) return;
+  const f = fuera;
+  fuera = null;
+  if (pasaPagina(e.clientX - f.x0, e.clientY - f.y0, f.camino, e.timeStamp - f.t)) pasarPagina();
+});
+
+document.addEventListener("pointercancel", (e) => {
+  if (fuera && fuera.id === e.pointerId) fuera = null;
+});
+
+["header", "main", "footer"].forEach((zona) =>
+  document.querySelector(zona).addEventListener("touchstart", (e) => {
+    if (historiaIniciada) e.preventDefault();
+  }, { passive: false })
+);
 
 let pendiente = false;
 new ResizeObserver(() => {

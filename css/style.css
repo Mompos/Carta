@@ -496,40 +496,9 @@ body.cerillas-visibles #pista {
   to { transform: scale(0.9, 1.08) rotate(3deg); }
 }
 
-.fin {
-  cursor: pointer;
-  position: fixed;
-  inset: 0;
-  z-index: 8;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  background: rgba(20, 17, 15, 0.92);
-  animation: aparecer 2s ease forwards;
-}
-
 .cajetilla[hidden],
-.cerilla[hidden],
-.fin[hidden] {
+.cerilla[hidden] {
   display: none;
-}
-
-.fin-titulo {
-  font-size: 48px;
-  font-style: italic;
-  letter-spacing: 0.06em;
-}
-
-.fin-pista {
-  font-size: 15px;
-  opacity: 0.7;
-}
-
-@keyframes aparecer {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 .sobre.abierto .corte {
@@ -701,26 +670,159 @@ body.cerillas-visibles #pista {
   pointer-events: none;
 }
 
-.fin {
-  padding: 0 calc(24px + env(safe-area-inset-right)) 0 calc(24px + env(safe-area-inset-left));
-  text-align: center;
+
+.despedida {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 85%, rgba(150, 70, 20, 0.16), transparent 55%), var(--fondo);
+  overflow: hidden;
+  touch-action: none;
 }
 
-.fin-final {
-  font-size: 22px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.85;
+.despedida[hidden],
+.papel[hidden] {
+  display: none;
 }
 
-.fin-frase {
-  max-width: 30em;
+.cenizas {
+  position: absolute;
+  inset: 0;
+}
+
+.ceniza-palabra,
+.hojuela {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+}
+
+.ceniza-palabra {
+  padding: 14px 16px;
   font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
-  font-size: 26px;
-  line-height: 1.3;
+  font-size: clamp(24px, 6.6vw, 32px);
+  line-height: 1;
+  white-space: nowrap;
+  color: #cfc4b2;
+  text-shadow: 0 0 10px rgba(255, 130, 50, 0.45);
+  cursor: pointer;
+  touch-action: none;
 }
 
-.fin-datos {
-  font-size: 13px;
-  opacity: 0.5;
+.ceniza-palabra.salvada {
+  color: #ffe2a6;
+  text-shadow: 0 0 18px rgba(255, 170, 70, 0.95);
+  pointer-events: none;
+}
+
+.hojuela {
+  border-radius: 40%;
+  background: #8d857b;
+  pointer-events: none;
+}
+
+.papel {
+  position: relative;
+  width: min(86vw, 400px);
+  padding: 12% 0;
+  opacity: 0;
+  filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.5));
+}
+
+.papel.quemado {
+  filter: drop-shadow(0 0 16px rgba(255, 110, 30, 0.35));
+}
+
+@media (min-width: 470px) {
+  .papel {
+    padding: 54px 0;
+  }
+}
+
+.papel-borde,
+.papel-hoja {
+  position: absolute;
+  inset: 0;
+  background: var(--papel);
+}
+
+.papel.quemado .papel-borde {
+  background: #190d06;
+}
+
+.papel.quemado .papel-hoja {
+  inset: 7px;
+  background: radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(95, 50, 15, 0.55) 92%, rgba(40, 18, 6, 0.85) 100%), var(--papel);
+}
+
+.papel-texto {
+  position: relative;
+  padding: 0 12%;
+  text-align: center;
+  font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
+  font-size: var(--fuente-papel, 24px);
+  line-height: 1.3;
+  color: var(--tinta);
+}
+
+.ultima-carta span {
+  display: inline-block;
+  opacity: 0;
+}
+
+.papel.en-blanco .ultima-carta {
+  height: 4.5em;
+}
+
+.final-titulo,
+.final-huella {
+  font-family: "Times New Roman", Times, serif;
+  opacity: 0;
+}
+
+.final-titulo {
+  margin-top: 1em;
+  padding-top: 0.8em;
+  border-top: 1px solid rgba(90, 60, 20, 0.35);
+  font-size: 0.68em;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  color: #6b4a22;
+}
+
+.final-frase {
+  margin-top: 0.35em;
+  font-size: 0.95em;
+  line-height: 1.2;
+}
+
+.final-frase .bloque {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.final-frase .letra {
+  opacity: 0;
+}
+
+.final-huella {
+  margin-top: 0.8em;
+  font-size: 0.6em;
+  font-style: italic;
+  line-height: 1.35;
+  color: #6b4a22;
+}
+
+.sobre {
+  transition: transform 0.4s ease-out, filter 0.4s ease-out;
+}
+
+.sobre.reiniciando {
+  transform: scale(1.05);
+  filter: brightness(1.22);
+  transition: transform 2s linear, filter 2s linear;
 }

@@ -46,6 +46,14 @@ const FINALES = {
     titulo: "Quemada sin leer",
     frase: "La quemaste sin mirar atrás. Hay cartas que no se leen: se sobreviven.",
   },
+  tachada: {
+    titulo: "Tachada en voz baja",
+    frase: "La tachaste sin gritar. Debajo de cada línea todavía se puede leer.",
+  },
+  nada: {
+    titulo: "No quedó nada",
+    frase: "Ni una palabra. Solo tú, con las manos negras.",
+  },
 };
 
 const registro = {
@@ -59,8 +67,29 @@ const registro = {
   msReverso: 0,
   inicioReverso: 0,
   quemada: false,
-  quemoSinLeer: false,
+  leyendo: 0,
 };
+
+const MARCA_TACHADA = "\u2060";
+const memoria = new Map();
+let estadoFinal = null;
+
+function recordarPagina(i, esCorte) {
+  const previa = memoria.get(i);
+  const textos = palabras.map((p) => p.el.textContent);
+  const igual = previa && !esCorte && previa.palabras.length === textos.length && previa.palabras.every((m, k) => m.texto === textos[k]);
+  if (!igual) {
+    const perdidas = esCorte && previa ? previa.perdidas + previa.palabras.filter((m) => m.borrada).length : 0;
+    memoria.set(i, { perdidas, palabras: textos.map((texto) => ({ texto, viva: true, borrada: false, salvada: false })) });
+  }
+  palabras.forEach((p, k) => (p.recuerdo = memoria.get(i).palabras[k]));
+}
+
+function perder(p, borrada) {
+  if (!p.recuerdo) return;
+  p.recuerdo.viva = false;
+  if (borrada) p.recuerdo.borrada = true;
+}
 
 function anotarRabia(rabia, ms) {
   registro.rabiaSuma += rabia * ms;
@@ -325,8 +354,12 @@ function tachar(p, rabia = 0.5) {
   p.tachada = true;
   p.el.classList.add("tachada");
   registro.tachadas++;
+  perder(p, false);
   vibrar();
-  queueMicrotask(revisarPagina);
+  garabatear(p, rabia);
+}
+
+function garabatear(p, rabia) {
   const t = nuevaLinea();
   const grosor = fuente * (0.07 + 0.12 * rabia);
   const dientes = Math.max(4, Math.round(p.w / (fuente * (0.24 - 0.1 * rabia))));
@@ -404,6 +437,7 @@ function borrar(dedo, a, b) {
       p.borrada = true;
       p.el.classList.add("borrada");
       registro.borradas++;
+      perder(p, true);
       vibrar();
     }
   });
@@ -506,7 +540,7 @@ function avisar(mensaje) {
 }
 
 function actualizarPista() {
-  if (animando || !historiaIniciada || ardiendo) return;
+  if (animando || !historiaIniciada || ardiendo || estadoFinal) return;
   const desgaste = actualizarDesgaste();
   if (aviso && performance.now() < aviso.hasta && dedos.size === 0) {
     ponerPista(aviso.mensaje);
@@ -746,6 +780,7 @@ function cargarPagina(i, contenido) {
   if (!enPuente) actual = i;
   texto.innerHTML = contenido || (enPuente ? paginaPuente : paginas[i]);
   envolverPalabras();
+  if (!enPuente) recordarPagina(i, !!contenido);
   trazos = [];
   numero.textContent = enPuente ? "" : `— ${i + 1} —`;
   ajustar();
@@ -754,7 +789,7 @@ function cargarPagina(i, contenido) {
 
 carta.addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  if (animando || ardiendo || !historiaIniciada) return;
+  if (animando || ardiendo || estadoFinal || !historiaIniciada) return;
   try {
     carta.setPointerCapture(e.pointerId);
   } catch (error) {}
@@ -798,7 +833,7 @@ function pasaPagina(dx, dy, camino, duracion) {
 }
 
 function pasarPagina() {
-  if (volteada || enPuente || animando || ardiendo || !historiaIniciada) return;
+  if (volteada || enPuente || animando || ardiendo || estadoFinal || !historiaIniciada) return;
   if (actual + 1 < paginas.length) cambiarPagina(actual + 1, -1, 0);
   else if (!fotosQuemadas) voltearCarta();
   else irAlPuente();
@@ -918,15 +953,15 @@ async function partirCarta(ini, fin, furia = 0.3) {
   animando = true;
   cancelarPresion();
   soltarTodos();
-  registro.cortes++;
-  anotarRabia(furia, 2000);
-  sonido.rasgar(furia);
   medir();
   const lineas = lineasDeTexto();
   if (lineas.length < 2) {
     animando = false;
     return;
   }
+  registro.cortes++;
+  anotarRabia(furia, 2000);
+  sonido.rasgar(furia);
 
   const pendiente = (fin.x - ini.x) / (fin.y - ini.y);
   const corteEn = (y) => Math.min(ancho * 0.85, Math.max(ancho * 0.15, ini.x + (y - ini.y) * pendiente));
@@ -939,18 +974,19 @@ async function partirCarta(ini, fin, furia = 0.3) {
     let partidaIzq = false;
     let partidaDer = false;
     l.palabras.forEach((p) => {
-      const textoPalabra = p.el.textContent;
+      const marca = p.tachada ? MARCA_TACHADA : "";
+      const textoPalabra = marca + p.el.textContent;
       if (p.x + p.w <= corteX) izq.push(textoPalabra);
       else if (p.x >= corteX) der.push(textoPalabra);
       else {
         const d = dividirPalabra(p, corteX);
         x = d.x;
         if (d.izquierda) {
-          izq.push(d.izquierda);
+          izq.push(marca + d.izquierda);
           partidaIzq = !!d.derecha;
         }
         if (d.derecha) {
-          der.push(d.derecha);
+          der.push(marca + d.derecha);
           partidaDer = !!d.izquierda;
         }
       }
@@ -1021,6 +1057,15 @@ async function partirCarta(ini, fin, furia = 0.3) {
   limpiarForma();
   carta.style.opacity = 0;
   cargarPagina(actual, html);
+  palabras.forEach((p) => {
+    if (!p.el.textContent.includes(MARCA_TACHADA)) return;
+    p.el.textContent = p.el.textContent.replaceAll(MARCA_TACHADA, "");
+    p.recuerdo.texto = p.el.textContent;
+    p.tachada = true;
+    p.el.classList.add("tachada");
+    perder(p, false);
+    garabatear(p, furia);
+  });
   carta.style.opacity = "";
   await entrar([{ opacity: 0 }, { opacity: 1 }]);
 }
@@ -1036,7 +1081,7 @@ document.addEventListener("gesturestart", (e) => e.preventDefault());
 let fuera = null;
 
 document.addEventListener("pointerdown", (e) => {
-  if (!historiaIniciada || !fin.hidden || dedos.size || fuera) return;
+  if (!historiaIniciada || estadoFinal || dedos.size || fuera) return;
   if (e.target.closest("#carta, #cerilla, #cajetilla")) return;
   fuera = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: e.timeStamp, camino: 0 };
 });
@@ -1341,10 +1386,18 @@ async function irAlPuente() {
 
 const reloj = setInterval(() => {
   if (!historiaIniciada) return;
+  if (estadoFinal) {
+    avanzarFinal();
+    return;
+  }
   const t = tiempoHistoria();
+  if (!volteada && !enPuente && !ardiendo && !document.hidden) registro.leyendo += 0.5;
+  if (t >= duracionHistoria() - 0.3) {
+    terminar();
+    return;
+  }
   if (!enPuente && !ardiendo && !fotosQuemadas && t >= INICIO_FOTOS) irAFotos();
   if (!enPuente && !ardiendo && t >= INICIO_PUENTE) irAlPuente();
-  if (t >= duracionHistoria() - 0.3) terminar();
   actualizarDesgaste();
 }, 500);
 
@@ -1384,7 +1437,7 @@ function mostrarCerillas() {
 }
 
 function nuevaCerilla() {
-  if (ardiendo || cajetilla.hidden || (!enPuente && !volteada)) return;
+  if (ardiendo || estadoFinal || cajetilla.hidden || (!enPuente && !volteada)) return;
   quitarAnimaciones(cerilla);
   const caja = cajetilla.getBoundingClientRect();
   fosforo = { x: caja.left + caja.width * 0.72, y: caja.top - 34, rot: 14, encendida: false, frote: 0, historial: [], arrastre: null, vuelo: false };
@@ -1481,6 +1534,7 @@ function lanzarCerilla(vx, vy) {
   const giro = vx >= 0 ? 1 : -1;
 
   function volar(ahora) {
+    if (!fosforo) return;
     const dt = Math.min(40, ahora - anterior);
     anterior = ahora;
     vy += 0.0012 * dt;
@@ -1522,7 +1576,6 @@ function encenderPuente(x, y, furia = 0.3) {
   cerrarReverso();
   if (volteada) registro.inicioReverso = 0;
   registro.quemada = true;
-  if (registro.msReverso < 4000) registro.quemoSinLeer = true;
   anotarRabia(furia, 1500);
   soltarTodos();
   cerilla.hidden = true;
@@ -1663,7 +1716,11 @@ function arder(ahora) {
 
 async function finQuemado() {
   await carta.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, fill: "forwards" }).finished;
-  if (!quemaReverso) return;
+  if (estadoFinal) return;
+  if (!quemaReverso) {
+    iniciarDespedida();
+    return;
+  }
   await esperar(1200);
   qctx.clearRect(0, 0, ancho, alto);
   fuego = null;
@@ -1671,6 +1728,10 @@ async function finQuemado() {
   quemaReverso = false;
   fotosQuemadas = true;
   ocultarCerillas();
+  if (tiempoHistoria() >= duracionHistoria() - 12) {
+    iniciarDespedida();
+    return;
+  }
   limpiarForma();
   cargarPagina("puente");
   sonido.pagina();
@@ -1679,35 +1740,9 @@ async function finQuemado() {
   mostrarCerillas();
 }
 
-const fin = document.getElementById("fin");
-
-function elegirFinal() {
-  const media = rabiaMedia();
-  const destrozos = registro.tachadas + registro.cortes * 6 + registro.arrugadas * 6;
-  const gestos = registro.tachadas + registro.borradas + (registro.cortes + registro.arrugadas) * 8;
-  if (gestos < 8 && !registro.quemada) return "intacta";
-  if (registro.quemada && registro.quemoSinLeer) return "sinLeer";
-  if (media >= 0.5 || (media >= 0.35 && destrozos > registro.borradas * 1.5)) return "rabia";
-  return "calma";
-}
-
 function terminar() {
-  if (!fin.hidden) return;
-  clearInterval(reloj);
-  cerrarReverso();
-  const final = FINALES[elegirFinal()];
-  fin.querySelector(".fin-final").textContent = final.titulo;
-  fin.querySelector(".fin-frase").textContent = final.frase;
-  const contar = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
-  fin.querySelector(".fin-datos").textContent = [
-    contar(registro.tachadas, "palabra tachada", "palabras tachadas"),
-    contar(registro.borradas, "borrada", "borradas"),
-    contar(registro.cortes, "corte", "cortes"),
-    `rabia ${Math.round(rabiaMedia() * 100)}%`,
-  ].join(" · ");
-  fin.hidden = false;
-  pista.textContent = "";
-  fin.addEventListener("click", () => location.reload(), { once: true });
+  if (estadoFinal || ardiendo || animando || !historiaIniciada) return;
+  iniciarDespedida();
 }
 
 window.addEventListener("resize", () => {

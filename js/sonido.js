@@ -195,6 +195,11 @@ const sonido = (() => {
       }
     },
 
+    brasa() {
+      tono(392, 523, 0.5, 0.07);
+      rafaga({ dur: 0.12, tipo: "highpass", f: 3000, nivel: 0.06 });
+    },
+
     apagarFuego() {
       if (canales.fuego) fijar("fuego", 0, "lowpass", 450, 0.5);
     },

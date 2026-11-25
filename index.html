@@ -80,12 +80,18 @@
       <span class="cabeza"></span>
     </div>
 
-    <section id="fin" class="fin" hidden>
-      <p class="fin-titulo">Fin</p>
-      <p class="fin-final"></p>
-      <p class="fin-frase"></p>
-      <p class="fin-datos"></p>
-      <p class="fin-pista">Toca para volver a empezar</p>
+    <section id="despedida" class="despedida" hidden>
+      <div id="cenizas" class="cenizas"></div>
+      <div id="papel" class="papel" hidden>
+        <div class="papel-borde"></div>
+        <div class="papel-hoja"></div>
+        <div class="papel-texto">
+          <div class="ultima-carta"></div>
+          <p class="final-titulo"></p>
+          <p class="final-frase"></p>
+          <p class="final-huella"></p>
+        </div>
+      </div>
     </section>
 
     <audio id="cancion" src="Assets/Leonard%20Cohen%20-%20Paper%20Thin%20Hotel%20(Official%20Audio).mp3" preload="auto"></audio>
@@ -127,5 +133,6 @@
 
     <script src="js/sonido.js"></script>
     <script src="js/script.js"></script>
+    <script src="js/final.js"></script>
   </body>
 </html>

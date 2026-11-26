@@ -20,7 +20,44 @@ const VELOCIDAD_FUEGO = 1.43;
 const INICIO_FOTOS = 220;
 const INICIO_PUENTE = 280;
 const DURACION_CANCION = 343.6;
-const FONDO = "#2b2622";
+const FONDO = "#1d1510";
+const MESA_SVG =
+  "<svg xmlns='http://www.w3.org/2000/svg' width='720' height='720'>" +
+  "<filter id='m' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'>" +
+  "<feTurbulence type='fractalNoise' baseFrequency='0.0024 0.055' numOctaves='5' seed='7' stitchTiles='stitch'/>" +
+  "<feColorMatrix values='0.42 0 0 0 -0.02  0.27 0 0 0 -0.015  0.17 0 0 0 -0.01  0 0 0 0 1'/>" +
+  "</filter><rect width='720' height='720' filter='url(#m)'/></svg>";
+const URL_MESA = "data:image/svg+xml," + encodeURIComponent(MESA_SVG);
+const imagenMesa = new Image();
+imagenMesa.src = URL_MESA;
+document.documentElement.style.setProperty("--textura-mesa", `url("${URL_MESA}")`);
+
+function estiloMesa(c, x0, y0) {
+  const capas = [];
+  if (imagenMesa.complete && imagenMesa.naturalWidth) {
+    const patron = c.createPattern(imagenMesa, "repeat");
+    patron.setTransform(new DOMMatrix().translate(-x0, -y0));
+    capas.push(patron);
+  } else capas.push(FONDO);
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const vmax = Math.max(w, h) / 100;
+  const lampara = c.createRadialGradient(w * 0.5 - x0, h * 0.38 - y0, 0, w * 0.5 - x0, h * 0.38 - y0, 70 * vmax);
+  lampara.addColorStop(0, "rgba(255, 190, 120, 0.17)");
+  lampara.addColorStop(1, "rgba(255, 190, 120, 0)");
+  const vineta = c.createRadialGradient(w * 0.5 - x0, h * 0.45 - y0, 35 * vmax, w * 0.5 - x0, h * 0.45 - y0, 85 * vmax);
+  vineta.addColorStop(0, "rgba(0, 0, 0, 0)");
+  vineta.addColorStop(1, "rgba(0, 0, 0, 0.62)");
+  capas.push(lampara, vineta);
+  return capas;
+}
+
+function rellenarMesa(c, x0, y0) {
+  estiloMesa(c, x0, y0).forEach((capa) => {
+    c.fillStyle = capa;
+    c.fill();
+  });
+}
 const PISTA_INICIAL = "Desliza de derecha a izquierda ← para pasar la página · Frota ↔ para tachar, ↕ para borrar · Desliza ↓ para cortar · Mantén presionado para arrugar";
 const PISTA_ULTIMA = "Última página: desliza de derecha a izquierda ← para ver las fotos";
 const PISTA_PUENTE = "Raspa una cerilla en la caja y lánzala al puente";
@@ -241,11 +278,13 @@ function borrarEn(x, y, r, rabia = 0.3) {
 
 function dibujarRasgon(puntos) {
   ctx.lineCap = "round";
-  ctx.strokeStyle = FONDO;
   ctx.lineWidth = Math.max(1.5, fuente * 0.09);
   ctx.beginPath();
   puntos.forEach(([x, y], i) => (i ? ctx.lineTo(x * ancho, y * ancho) : ctx.moveTo(x * ancho, y * ancho)));
-  ctx.stroke();
+  estiloMesa(ctx, origen.x, origen.y).forEach((capa) => {
+    ctx.strokeStyle = capa;
+    ctx.stroke();
+  });
   ctx.strokeStyle = "rgba(255, 250, 235, 0.7)";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -730,7 +769,7 @@ function cargarPagina(i, contenido) {
   enPuente = i === "puente";
   if (volteada) cerrarReverso();
   volteada = false;
-  carta.classList.remove("volteada");
+  carta.classList.remove("volteada", "en-llamas");
   document.body.classList.toggle("puente-activo", enPuente);
   if (!enPuente) actual = i;
   texto.innerHTML = contenido || (enPuente ? paginaPuente : paginas[i]);
@@ -1320,6 +1359,7 @@ async function abrirSobre() {
   await esperar(1300);
   await escenaSobre.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, fill: "forwards" }).finished;
   escenaSobre.style.display = "none";
+  document.body.classList.remove("inicio");
   historiaIniciada = true;
   ajustar();
   actualizarPista();
@@ -1521,6 +1561,7 @@ function encenderPuente(x, y, furia = 0.3) {
   if (ardiendo) return;
   ardiendo = true;
   quemaReverso = volteada;
+  carta.classList.add("en-llamas");
   cerrarReverso();
   if (volteada) registro.inicioReverso = 0;
   registro.quemada = true;
@@ -1586,8 +1627,9 @@ function arder(ahora) {
 
   qctx.clearRect(0, 0, ancho, alto);
   if (fuego.consumido) {
-    qctx.fillStyle = FONDO;
-    qctx.fillRect(0, 0, ancho, alto);
+    qctx.beginPath();
+    qctx.rect(0, 0, ancho, alto);
+    rellenarMesa(qctx, origen.x, origen.y);
   } else {
     calcularRadios(ahora);
     contornoFuego(fuente * 1.8);
@@ -1603,8 +1645,7 @@ function arder(ahora) {
     qctx.fillStyle = "#ff8c26";
     qctx.fill();
     contornoFuego(0);
-    qctx.fillStyle = FONDO;
-    qctx.fill();
+    rellenarMesa(qctx, origen.x, origen.y);
 
     const nuevas = Math.min(MAX_PARTICULAS - fuego.particulas.length, Math.round((dt / 16) * 4));
     for (let k = 0; k < nuevas; k++) {

@@ -155,6 +155,15 @@ function vibrar() {
   etiqueta.remove();
 }
 
+function tintaViva(span) {
+  const claro = Math.random() * 0.22;
+  const r = Math.round(29 + (70 - 29) * claro);
+  const g = Math.round(35 + (78 - 35) * claro);
+  const b = Math.round(64 + (120 - 64) * claro);
+  span.style.color = `rgba(${r}, ${g}, ${b}, ${(0.84 + Math.random() * 0.16).toFixed(2)})`;
+  span.style.transform = `translateY(${((Math.random() - 0.5) * 1.6).toFixed(2)}px) rotate(${((Math.random() - 0.5) * 2.2).toFixed(2)}deg)`;
+}
+
 function envolverPalabras() {
   const nodos = [];
   const caminante = document.createTreeWalker(texto, NodeFilter.SHOW_TEXT);
@@ -170,6 +179,7 @@ function envolverPalabras() {
       } else {
         const span = document.createElement("span");
         span.className = "palabra";
+        tintaViva(span);
         span.textContent = parte;
         fragmento.appendChild(span);
       }

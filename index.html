@@ -16,6 +16,12 @@
   </head>
 
   <body class="inicio">
+    <svg class="filtros" width="0" height="0" aria-hidden="true">
+      <filter id="trazo-mano" x="-5%" y="-10%" width="110%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="3" result="ruido" />
+        <feDisplacementMap in="SourceGraphic" in2="ruido" scale="5" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </svg>
     <header>
       <h1>El amor manuscrito <em>y el odio como catarsis</em></h1>
     </header>
@@ -110,13 +116,24 @@
       <section class="pagina puente">
         <p class="cuerpo">Hoy quemaré nuestros recuerdos y cualquier posibilidad de volver a ti o a aquella confusa idea del estar contigo; voy a quemarte de mi mente.</p>
         <svg class="dibujo-puente" viewBox="0 0 300 120">
-          <path d="M0 106 L34 106 M266 106 L300 106" />
-          <path d="M30 106 Q150 0 270 106" />
-          <path d="M36 106 Q150 8 264 106" />
-          <path d="M4 55 L296 55 M4 62 L296 62" />
-          <path d="M60 62 L60 82 M90 62 L90 66 M210 62 L210 66 M240 62 L240 82" />
-          <path d="M10 55 L10 45 M30 55 L30 45 M50 55 L50 45 M70 55 L70 45 M90 55 L90 45 M110 55 L110 45 M130 55 L130 45 M150 55 L150 45 M170 55 L170 45 M190 55 L190 45 M210 55 L210 45 M230 55 L230 45 M250 55 L250 45 M270 55 L270 45 M290 55 L290 45 M4 45 L296 45" />
-          <path class="agua" d="M20 112 Q40 108 60 112 T100 112 T140 112 M150 117 Q170 113 190 117 T230 117 T270 117" />
+          <g class="trazo">
+            <path d="M0 106 L34 106 M266 106 L300 106" />
+            <path d="M30 106 Q150 0 270 106" />
+            <path d="M36 106 Q150 8 264 106" />
+            <path d="M4 55 L296 55 M4 62 L296 62" />
+            <path d="M60 62 L60 82 M90 62 L90 66 M210 62 L210 66 M240 62 L240 82" />
+            <path d="M10 55 L10 45 M30 55 L30 45 M50 55 L50 45 M70 55 L70 45 M90 55 L90 45 M110 55 L110 45 M130 55 L130 45 M150 55 L150 45 M170 55 L170 45 M190 55 L190 45 M210 55 L210 45 M230 55 L230 45 M250 55 L250 45 M270 55 L270 45 M290 55 L290 45 M4 45 L296 45" />
+            <path class="agua" d="M20 112 Q40 108 60 112 T100 112 T140 112 M150 117 Q170 113 190 117 T230 117 T270 117" />
+          </g>
+          <g class="repaso" transform="translate(1.1 0.7) rotate(0.35 150 60)">
+            <path d="M0 106 L34 106 M266 106 L300 106" />
+            <path d="M30 106 Q150 0 270 106" />
+            <path d="M36 106 Q150 8 264 106" />
+            <path d="M4 55 L296 55 M4 62 L296 62" />
+            <path d="M60 62 L60 82 M90 62 L90 66 M210 62 L210 66 M240 62 L240 82" />
+            <path d="M10 55 L10 45 M30 55 L30 45 M50 55 L50 45 M70 55 L70 45 M90 55 L90 45 M110 55 L110 45 M130 55 L130 45 M150 55 L150 45 M170 55 L170 45 M190 55 L190 45 M210 55 L210 45 M230 55 L230 45 M250 55 L250 45 M270 55 L270 45 M290 55 L290 45 M4 45 L296 45" />
+            <path d="M20 112 Q40 108 60 112 T100 112 T140 112 M150 117 Q170 113 190 117 T230 117 T270 117" />
+          </g>
         </svg>
       </section>
 

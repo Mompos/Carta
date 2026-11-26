@@ -263,9 +263,6 @@ function salpicar(l) {
   onda.animate([{ transform: "scale(0.6)", opacity: 0.9 }, { transform: "scale(2.5)", opacity: 0 }], { duration: 1100, easing: "ease-out", fill: "forwards" }).finished.then(() => onda.remove());
 
   lagrimaActual = l;
-  setTimeout(() => {
-    if (lagrimaActual === l && !l.borradas) pista.textContent = "Frota la lágrima para borrarla";
-  }, 1600);
 }
 
 function borrarLagrima(x, y) {
@@ -325,6 +322,7 @@ function terminarLimpieza() {
   const l = lagrimaActual;
   l.saliendo = true;
   lagrimaActual = null;
+  aprender("lagrima");
   pista.textContent = "";
   vibrar();
   l.lienzo.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 450, fill: "forwards" }).finished.then(() => l.lienzo.remove());
@@ -512,45 +510,77 @@ function dejarCeniza(caja) {
   papel.hidden = true;
   sonido.apagarFuego();
   cenizaCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-  const brasas = [];
-  const base = caja.top + caja.height * 0.82;
-  const trozo = (x, y, lado, color, aplastado) => {
-    cenizaCtx.fillStyle = color;
-    cenizaCtx.beginPath();
-    for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * Math.PI * 2 + azar(-0.4, 0.4);
-      const rr = lado * azar(0.45, 1);
-      if (k) cenizaCtx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * aplastado);
-      else cenizaCtx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * aplastado);
+  const zona = zonaLluvia();
+  const base = caja.top + caja.height * 0.8;
+  const forma = (n) => Array.from({ length: n }, (_, k) => {
+    const a = (k / n) * Math.PI * 2 + azar(-0.4, 0.4);
+    return [Math.cos(a) * azar(0.45, 1), Math.sin(a) * azar(0.45, 1)];
+  });
+  const copos = [];
+  const agregar = (cantidad, destino, tamano, color) => {
+    for (let i = 0; i < cantidad; i++) {
+      const [tx, ty] = destino();
+      copos.push({
+        x0: caja.left + caja.width * azar(0.15, 0.85),
+        y0: caja.top + caja.height * azar(0.3, 0.9),
+        tx,
+        ty,
+        lado: tamano(),
+        giro: azar(-3, 3),
+        color: color(),
+        retraso: azar(0, 0.35),
+        aplastado: azar(0.45, 0.75),
+        forma: forma(6),
+        brasa: Math.random() < 0.06,
+      });
     }
+  };
+  const gris = () => {
+    const g = Math.round(azar(70, 165));
+    return `rgba(${g}, ${g - 6}, ${g - 12}, ${azar(0.4, 0.9).toFixed(2)})`;
+  };
+  agregar(10, () => [caja.left + caja.width * azar(0.2, 0.8), base + azar(-0.1, 0.05) * caja.height], () => azar(9, 20), () => "rgba(28, 20, 15, 0.9)");
+  agregar(160, () => [caja.left + caja.width * (0.5 + (Math.random() + Math.random() - 1) * 0.36), base - Math.abs(Math.random() + Math.random() - 1) * caja.height * 0.14 + azar(0, 8)], () => azar(1.5, 5), gris);
+  const grisClaro = () => {
+    const g = Math.round(azar(125, 205));
+    return `rgba(${g}, ${g - 5}, ${g - 10}, ${azar(0.55, 0.95).toFixed(2)})`;
+  };
+  agregar(460, () => {
+    const cerca = Math.random() < 0.55;
+    const x = cerca ? caja.left + caja.width / 2 + (Math.random() + Math.random() - 1) * window.innerWidth * 0.5 : azar(zona.izq, zona.der);
+    const y = cerca ? base + (Math.random() + Math.random() - 1) * (zona.abajo - zona.arriba) * 0.35 : azar(zona.arriba, zona.abajo);
+    return [Math.min(zona.der, Math.max(zona.izq, x)), Math.min(zona.abajo, Math.max(zona.arriba, y))];
+  }, () => azar(1.6, 4.6), grisClaro);
+
+  const dibujarCopo = (c, x, y, angulo, apagado) => {
+    cenizaCtx.save();
+    cenizaCtx.translate(x, y);
+    cenizaCtx.rotate(angulo);
+    cenizaCtx.fillStyle = c.color;
+    cenizaCtx.beginPath();
+    c.forma.forEach(([fx, fy], k) => (k ? cenizaCtx.lineTo(fx * c.lado, fy * c.lado * c.aplastado) : cenizaCtx.moveTo(fx * c.lado, fy * c.lado * c.aplastado)));
     cenizaCtx.closePath();
     cenizaCtx.fill();
+    if (c.brasa && apagado < 1) {
+      cenizaCtx.fillStyle = `rgba(255, 120, 40, ${((1 - apagado) * azar(0.5, 0.95)).toFixed(2)})`;
+      cenizaCtx.fillRect(-1, -1, 2, 2);
+    }
+    cenizaCtx.restore();
   };
-  for (let i = 0; i < 9; i++) {
-    const x = caja.left + caja.width * azar(0.2, 0.8);
-    const y = base + azar(-0.12, 0.06) * caja.height;
-    trozo(x, y, azar(9, 20), "rgba(28, 20, 15, 0.9)", 0.55);
-    trozo(x + azar(-3, 3), y + azar(-2, 2), azar(4, 8), "rgba(110, 100, 90, 0.35)", 0.5);
-  }
-  for (let i = 0; i < 220; i++) {
-    const montoncito = Math.random() < 0.7;
-    const ancho_ = montoncito ? 0.32 : 0.46;
-    const x = caja.left + caja.width * (0.5 + (Math.random() + Math.random() - 1) * ancho_);
-    const y = montoncito ? base - Math.abs(Math.random() + Math.random() - 1) * caja.height * 0.14 + azar(0, 8) : caja.top + caja.height * azar(0.35, 0.95);
-    const gris = Math.round(azar(70, 165));
-    trozo(x, y, azar(1.5, montoncito ? 5 : 3.5), `rgba(${gris}, ${gris - 6}, ${gris - 12}, ${azar(0.4, 0.9).toFixed(2)})`, 0.6);
-    if (montoncito && Math.random() < 0.08) brasas.push({ x, y });
-  }
-  const fondo = cenizaCtx.getImageData(0, 0, ceniza.width, ceniza.height);
+
   const inicio = performance.now();
-  (function apagar(ahora) {
-    const t = Math.min(1, (ahora - inicio) / 3500);
-    cenizaCtx.putImageData(fondo, 0, 0);
-    brasas.forEach((b) => {
-      cenizaCtx.fillStyle = `rgba(255, 120, 40, ${((1 - t) * azar(0.4, 0.9)).toFixed(2)})`;
-      cenizaCtx.fillRect(b.x, b.y, 2, 2);
+  const VUELO = 2600;
+  (function soplar(ahora) {
+    const t = (ahora - inicio) / VUELO;
+    cenizaCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    copos.forEach((c) => {
+      const f = Math.min(1, Math.max(0, (t - c.retraso) / (1 - c.retraso)));
+      const e = 1 - Math.pow(1 - f, 3);
+      const x = c.x0 + (c.tx - c.x0) * e + Math.sin(f * Math.PI) * 18 * Math.sin(c.giro * 3);
+      const y = c.y0 + (c.ty - c.y0) * e - Math.sin(f * Math.PI) * 40;
+      dibujarCopo(c, x, y, c.giro * e, Math.min(1, (ahora - inicio) / 6000));
     });
-    if (t < 1) requestAnimationFrame(apagar);
+    if (ahora - inicio < 6000) requestAnimationFrame(soplar);
   })(inicio);
   estadoFinal = "ceniza";
   clearInterval(reloj);

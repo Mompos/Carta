@@ -12,7 +12,7 @@ const TINTA = "#1d2340";
 const VENTANA_GESTO = 450;
 const GASTADA_TOQUE = 20000;
 const GASTADA_TIEMPO = 90;
-const PISTA_REVERSO = "Desliza hacia arriba para volver · Raspa una cerilla y lánzala para quemarla";
+const PISTA_REVERSO = "";
 const PISTA_GASTADA = "La carta ya está gastada: desliza hacia arriba para voltearla";
 const ESPERA_ARRUGAR = 700;
 const TIEMPO_ARRUGAR = 5000;
@@ -58,9 +58,9 @@ function rellenarMesa(c, x0, y0) {
     c.fill();
   });
 }
-const PISTA_INICIAL = "Desliza de derecha a izquierda ← para pasar la página · Frota ↔ para tachar, ↕ para borrar · Desliza ↓ para cortar · Mantén presionado para arrugar";
-const PISTA_ULTIMA = "Última página: desliza de derecha a izquierda ← para ver las fotos";
-const PISTA_PUENTE = "Raspa una cerilla en la caja y lánzala al puente";
+const PISTA_INICIAL = "";
+const PISTA_ULTIMA = "";
+const PISTA_PUENTE = "";
 const paginas = [...document.querySelectorAll("#paginas .pagina:not(.puente)")].map((s) => s.innerHTML);
 const paginaPuente = document.querySelector("#paginas .pagina.puente").innerHTML;
 const quemado = document.getElementById("quemado");
@@ -359,6 +359,7 @@ function tachar(p, rabia = 0.5) {
   p.tachada = true;
   p.el.classList.add("tachada");
   registro.tachadas++;
+  aprender("tachar");
   vibrar();
   garabatear(p, rabia);
 }
@@ -441,6 +442,7 @@ function borrar(dedo, a, b) {
       p.borrada = true;
       p.el.classList.add("borrada");
       registro.borradas++;
+      aprender("borrar");
       vibrar();
     }
   });
@@ -691,6 +693,7 @@ function soltarTodos() {
 }
 
 async function arrugar() {
+  aprender("arrugar");
   const bola = aCss(presion.bola);
   const desde = { clipPath: carta.style.clipPath, transform: carta.style.transform || "none" };
   presion = null;
@@ -822,8 +825,85 @@ function soltar(e) {
   const dedo = dedos.get(e.pointerId);
   if (!dedos.delete(e.pointerId)) return;
   if (presion && presion.id === e.pointerId) cancelarPresion();
-  if (e.type === "pointerup" && dedos.size === 0) revisarDeslizamiento(dedo, punto(e));
+  if (e.type === "pointerup" && dedos.size === 0) {
+    const fin = punto(e);
+    const toque = dedo.camino < 14 && fin.t - dedo.inicio.t < 600 && !dedo.frotado;
+    const foto = toque && volteada && !animando && !ardiendo ? fotoEn(e.clientX, e.clientY) : null;
+    if (foto) acercarFoto(foto);
+    else revisarDeslizamiento(dedo, fin);
+  }
   actualizarPista();
+}
+
+let fotoCerca = null;
+
+function fotoEn(x, y) {
+  return [...reverso.querySelectorAll(".foto")]
+    .sort((a, b) => (parseInt(getComputedStyle(b).zIndex) || 0) - (parseInt(getComputedStyle(a).zIndex) || 0))
+    .find((f) => {
+      const r = f.getBoundingClientRect();
+      return x > r.left && x < r.right && y > r.top && y < r.bottom;
+    });
+}
+
+function acercarFoto(foto) {
+  if (fotoCerca) return;
+  aprender("foto");
+  sonido.pagina();
+  vibrar();
+  const caja = foto.getBoundingClientRect();
+  const giro = getComputedStyle(foto).transform;
+  const anchoOriginal = foto.offsetWidth;
+  const alto0 = foto.offsetHeight;
+  const ancho1 = Math.min(window.innerWidth * 0.88, 540, (window.innerHeight * 0.72 * anchoOriginal) / alto0);
+  const escala = ancho1 / anchoOriginal;
+  const alto1 = alto0 * escala;
+
+  const visor = document.createElement("div");
+  visor.className = "visor-foto";
+  const copia = foto.cloneNode(true);
+  copia.classList.add("foto-cerca");
+  copia.style.setProperty("--fuente", fuente * escala + "px");
+  visor.appendChild(copia);
+  document.body.appendChild(visor);
+
+  const desde = {
+    left: caja.left + (caja.width - anchoOriginal) / 2 + "px",
+    top: caja.top + (caja.height - alto0) / 2 + "px",
+    width: anchoOriginal + "px",
+    transform: giro === "none" ? "none" : giro,
+    "--fuente": fuente + "px",
+  };
+  const hasta = {
+    left: (window.innerWidth - ancho1) / 2 + "px",
+    top: (window.innerHeight - alto1) / 2 + "px",
+    width: ancho1 + "px",
+    transform: "rotate(-1.5deg)",
+    "--fuente": fuente * escala + "px",
+  };
+  Object.assign(copia.style, { right: "auto", bottom: "auto", left: hasta.left, top: hasta.top, width: hasta.width, transform: hasta.transform });
+  foto.style.visibility = "hidden";
+  copia.animate([desde, hasta], { duration: 480, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)" });
+  visor.animate([{ backgroundColor: "rgba(10, 7, 5, 0)" }, { backgroundColor: "rgba(10, 7, 5, 0.6)" }], { duration: 480, fill: "forwards" });
+  fotoCerca = { foto, visor, copia, desde, hasta };
+
+  visor.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    soltarFoto();
+  });
+}
+
+async function soltarFoto() {
+  if (!fotoCerca || fotoCerca.saliendo) return;
+  const { foto, visor, copia, desde, hasta } = fotoCerca;
+  fotoCerca.saliendo = true;
+  sonido.pagina();
+  visor.animate([{ backgroundColor: "rgba(10, 7, 5, 0.6)" }, { backgroundColor: "rgba(10, 7, 5, 0)" }], { duration: 380, fill: "forwards" });
+  await copia.animate([hasta, desde], { duration: 380, easing: "cubic-bezier(0.5, 0, 0.7, 0.4)", fill: "forwards" }).finished;
+  foto.style.visibility = "";
+  visor.remove();
+  fotoCerca = null;
 }
 
 function pasaPagina(dx, dy, camino, duracion) {
@@ -837,6 +917,7 @@ function pasaPagina(dx, dy, camino, duracion) {
 
 function pasarPagina() {
   if (volteada || enPuente || animando || ardiendo || estadoFinal || !historiaIniciada) return;
+  aprender("pasar");
   if (actual + 1 < paginas.length) cambiarPagina(actual + 1, -1, 0);
   else if (!fotosQuemadas) voltearCarta();
   else irAlPuente();
@@ -869,6 +950,7 @@ function revisarDeslizamiento(dedo, fin) {
 }
 
 async function voltearCarta() {
+  aprender(volteada ? "volver" : "voltear");
   if (enPuente) return;
   animando = true;
   cancelarPresion();
@@ -963,6 +1045,7 @@ async function partirCarta(ini, fin, furia = 0.3) {
     return;
   }
   registro.cortes++;
+  aprender("cortar");
   anotarRabia(furia, 2000);
   sonido.rasgar(furia);
 
@@ -1262,7 +1345,8 @@ function romperSello() {
   for (let i = 0; i < 10; i++) soltarMiga(caja.left + Math.random() * caja.width, caja.top + Math.random() * caja.height);
   sello.style.visibility = "hidden";
   sobre.classList.add("sin-sello");
-  pista.textContent = "Toma el abrecartas y pasa la punta por la línea de arriba del sobre";
+  pista.textContent = "";
+  aprender("sello");
 }
 
 function pintarAbrecartas() {
@@ -1350,6 +1434,7 @@ function prepararCorte() {
 }
 
 async function abrirSobre() {
+  aprender("abrecartas");
   if (sobreAbierto) return;
   sobreAbierto = true;
   agarre = null;
@@ -1569,6 +1654,12 @@ let fuego = null;
 
 function encenderPuente(x, y, furia = 0.3) {
   if (ardiendo) return;
+  if (fotoCerca) {
+    fotoCerca.foto.style.visibility = "";
+    fotoCerca.visor.remove();
+    fotoCerca = null;
+  }
+  aprender("cerilla");
   ardiendo = true;
   quemaReverso = volteada;
   carta.classList.add("en-llamas");

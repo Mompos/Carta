@@ -10,7 +10,8 @@ const FRAGMENTOS = [...document.querySelectorAll("#paginas .lagrimas p")].map((p
 const papel = document.getElementById("papel");
 
 let papelListo = 0;
-let lagrimasDichas = false;
+let lagrimaActual = null;
+let frote = null;
 let reinicio = null;
 
 function tiempoRestante() {
@@ -82,28 +83,22 @@ async function iniciarDespedida() {
 }
 
 function avanzarFinal() {
-  if (estadoFinal === "lagrimas" && lagrimasDichas && tiempoRestante() <= COLA_FINAL) mostrarPapel();
-  else if (estadoFinal === "papel" && papelListo && performance.now() - papelListo > 6000 && tiempoRestante() <= 1.5) guardarEnSobre();
+  if (estadoFinal === "papel" && papelListo && performance.now() - papelListo > 7000) guardarEnSobre();
 }
 
 function llorar() {
   estadoFinal = "lagrimas";
-  const espacio = Math.max(0, tiempoRestante() - COLA_FINAL - 4);
-  const pausa = Math.min(6000, Math.max(2600, (espacio * 1000) / Math.max(1, FRAGMENTOS.length)));
-  let n = 0;
+  pista.textContent = "";
+  siguienteLagrima(0);
+}
 
-  (function caer() {
-    if (estadoFinal !== "lagrimas") return;
-    if (n < FRAGMENTOS.length) {
-      soltarLagrima(FRAGMENTOS[n], n, pausa);
-      n++;
-      if (n === FRAGMENTOS.length) setTimeout(() => (lagrimasDichas = true), Math.min(pausa * 2, 7000));
-      setTimeout(caer, pausa);
-    } else {
-      soltarLagrima(null, n++, pausa);
-      setTimeout(caer, 1600 + Math.random() * 2400);
-    }
-  })();
+function siguienteLagrima(n) {
+  if (estadoFinal !== "lagrimas") return;
+  if (n >= FRAGMENTOS.length) {
+    setTimeout(mostrarPapel, 900);
+    return;
+  }
+  soltarLagrima(FRAGMENTOS[n], n);
 }
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -155,22 +150,16 @@ function buscarLugar(radio, cajaTexto) {
   return mejor;
 }
 
-function soltarLagrima(texto, n, pausa) {
-  const escala = escalaGotas();
-  const radio = (texto ? azar(40, 60) : Math.random() < 0.6 ? azar(10, 22) : azar(24, 38)) * escala;
-  let frase = null;
-  let caja = null;
-  if (texto) {
-    frase = document.createElement("p");
-    frase.className = "frase-lagrima";
-    frase.textContent = texto;
-    lluvia.appendChild(frase);
-    caja = { w: frase.offsetWidth + 16, h: frase.offsetHeight + 10 };
-  }
+function soltarLagrima(texto, n) {
+  const radio = azar(40, 62) * escalaGotas();
+  const frase = document.createElement("p");
+  frase.className = "frase-lagrima";
+  frase.textContent = texto;
+  lluvia.appendChild(frase);
+  const caja = { w: frase.offsetWidth + 16, h: frase.offsetHeight + 10 };
+  activas.length = 0;
   const { x: cx, y: cy } = buscarLugar(radio * 2.2, caja);
-  const vida = frase ? Math.min(16000, pausa * 3.4) : azar(4500, 8000);
-  activas.push({ x: cx, y: cy, radio: radio * 1.5, caja, hasta: performance.now() + vida * 0.8 });
-  if (frase) frase.style.transform = `translate(${cx - frase.offsetWidth / 2}px, ${cy - frase.offsetHeight / 2}px)`;
+  frase.style.transform = `translate(${cx - frase.offsetWidth / 2}px, ${cy - frase.offsetHeight / 2}px)`;
 
   const gota = document.createElement("i");
   gota.className = "lagrima";
@@ -192,10 +181,63 @@ function soltarLagrima(texto, n, pausa) {
     )
     .finished.then(() => {
       gota.remove();
-      salpicar(cx, cy, radio, frase, vida);
+      const svg = salpicar(cx, cy, radio, frase);
+      lagrimaActual = { n, cx, cy, radio, svg, frase, limpio: 0 };
+      setTimeout(() => {
+        if (lagrimaActual && lagrimaActual.n === n && !lagrimaActual.limpio) pista.textContent = "Frota la lágrima para limpiarla";
+      }, 1600);
     })
     .catch(() => gota.remove());
 }
+
+function limpiar(e) {
+  if (!frote || frote.id !== e.pointerId || !lagrimaActual || lagrimaActual.saliendo) return;
+  const paso = Math.hypot(e.clientX - frote.x, e.clientY - frote.y);
+  frote.x = e.clientX;
+  frote.y = e.clientY;
+  const l = lagrimaActual;
+  const alcance = Math.max(l.radio * 1.9, 80);
+  if (Math.hypot(e.clientX - l.cx, e.clientY - l.cy) > alcance) return;
+  if (!l.tocada) {
+    l.tocada = true;
+    quitarAnimaciones(l.frase);
+  }
+  l.limpio = Math.min(1, l.limpio + paso / (l.radio * 7 + 260));
+  sonido.goma(0.15 + 0.2 * Math.min(1, paso / 20));
+  l.svg.style.opacity = (1 - l.limpio * 0.92).toFixed(2);
+  l.svg.style.transform = `scale(${(1 + l.limpio * 0.12).toFixed(3)})`;
+  l.frase.style.opacity = (1 - l.limpio).toFixed(2);
+  l.frase.style.filter = `blur(${(l.limpio * 4).toFixed(1)}px)`;
+  if (l.limpio >= 1) terminarLimpieza();
+}
+
+function terminarLimpieza() {
+  const l = lagrimaActual;
+  l.saliendo = true;
+  lagrimaActual = null;
+  pista.textContent = "";
+  vibrar();
+  quitarAnimaciones(l.frase);
+  [l.svg, l.frase].forEach((el) =>
+    el.animate([{ opacity: el.style.opacity || 1 }, { opacity: 0 }], { duration: 450, fill: "forwards" }).finished.then(() => el.remove()).catch(() => el.remove())
+  );
+  setTimeout(() => siguienteLagrima(l.n + 1), 800);
+}
+
+despedida.addEventListener("pointerdown", (e) => {
+  if (estadoFinal !== "lagrimas") return;
+  e.preventDefault();
+  frote = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  try {
+    despedida.setPointerCapture(e.pointerId);
+  } catch (error) {}
+});
+despedida.addEventListener("pointermove", limpiar);
+["pointerup", "pointercancel"].forEach((tipo) =>
+  despedida.addEventListener(tipo, (e) => {
+    if (frote && frote.id === e.pointerId) frote = null;
+  })
+);
 
 function contornoIrregular(radio, puntas) {
   const n = 18;
@@ -225,10 +267,9 @@ function nodo(tipo, atributos, padre) {
   return el;
 }
 
-function salpicar(cx, cy, radio, frase, vida) {
-  if (estadoFinal !== "lagrimas" && estadoFinal !== "papel") return;
-  sonido.gota(radio > 26);
-  if (frase) vibrar();
+function salpicar(cx, cy, radio, frase) {
+  sonido.gota(true);
+  vibrar();
   const id = "g" + numeroGota++;
   const alcance = radio * 2.6;
   const lado = alcance * 2;
@@ -296,22 +337,8 @@ function salpicar(cx, cy, radio, frase, vida) {
   );
   onda.animate([{ transform: "scale(0.6)", opacity: 0.9 }, { transform: "scale(2.5)", opacity: 0 }], { duration: 1100, easing: "ease-out", fill: "both" });
 
-  svg.animate(
-    [{ opacity: 1 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }],
-    { duration: vida, easing: "ease-in", fill: "forwards" }
-  ).finished.then(() => svg.remove()).catch(() => {});
-
-  if (frase) {
-    frase.animate(
-      [
-        { opacity: 0, filter: "blur(4px)" },
-        { opacity: 1, filter: "blur(0px)", offset: 0.1 },
-        { opacity: 1, filter: "blur(0px)", offset: 0.72 },
-        { opacity: 0, filter: "blur(2px)" },
-      ],
-      { duration: vida, delay: 250, fill: "both" }
-    ).finished.then(() => frase.remove()).catch(() => {});
-  }
+  frase.animate([{ opacity: 0, filter: "blur(4px)" }, { opacity: 1, filter: "blur(0px)" }], { duration: 1200, delay: 250, fill: "both" });
+  return svg;
 }
 
 function limpiarPalabra(t) {
@@ -366,56 +393,25 @@ function bordeRoto(desgarro) {
 async function mostrarPapel() {
   estadoFinal = "papel";
   pista.textContent = "";
-  lluvia.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 2400, fill: "forwards" });
+  lluvia.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, fill: "forwards" });
 
-  const cierre = FINALES[elegirFinal()];
   const quemado_ = registro.quemada;
   papel.classList.toggle("quemado", quemado_);
+  papel.classList.add("solo-fin");
   papel.querySelector(".papel-borde").style.clipPath = bordeRoto(quemado_ ? 3.5 : 0.6);
   papel.querySelector(".papel-hoja").style.clipPath = bordeRoto(quemado_ ? 4 : 0.6);
-  const carta_ = papel.querySelector(".ultima-carta");
-  const lineas = componerCarta();
-  lineas.forEach((linea) => {
-    const p = document.createElement("p");
-    linea.forEach((t, i) => {
-      if (i) p.append(" ");
-      const s = document.createElement("span");
-      s.textContent = t;
-      p.appendChild(s);
-    });
-    carta_.appendChild(p);
-  });
-  papel.classList.toggle("en-blanco", !lineas.length);
-  papel.querySelector(".final-titulo").textContent = cierre.titulo;
-  const frase = papel.querySelector(".final-frase");
-  const letras = escribirEn(frase, cierre.frase);
-  papel.querySelector(".final-huella").textContent = describirHuella();
+  papel.querySelector(".ultima-carta").textContent = "";
+  papel.querySelector(".final-titulo").textContent = "";
+  papel.querySelector(".final-huella").textContent = "";
+  const letras = escribirEn(papel.querySelector(".final-frase"), "Fin");
 
   papel.hidden = false;
   ajustarPapel();
   sonido.pagina();
   papel.animate([{ opacity: 0, transform: "translateY(26px) rotate(-2deg)" }, { opacity: 1, transform: "none" }], { duration: 1600, easing: "ease-out", fill: "both" });
-  await esperar(1500);
-
-  const spans = [...carta_.querySelectorAll("span")];
-  const paso = Math.min(320, 3600 / Math.max(1, spans.length));
-  spans.forEach((s, i) =>
-    s.animate(
-      [
-        { opacity: 0, transform: `translate(${(Math.random() - 0.5) * 40}px, -90px) rotate(${(Math.random() - 0.5) * 40}deg)` },
-        { opacity: 1, transform: "none" },
-      ],
-      { duration: 1300, delay: i * paso, easing: "ease-out", fill: "both" }
-    )
-  );
-  await esperar(spans.length ? spans.length * paso + 1500 : 2200);
-
-  mostrarSuave(papel.querySelector(".final-titulo"));
-  await esperar(700);
-  const ritmo = Math.min(45, 4500 / letras.length);
-  letras.forEach((l, i) => l.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: i * ritmo, fill: "both" }));
-  await esperar(letras.length * ritmo + 500);
-  mostrarSuave(papel.querySelector(".final-huella"));
+  await esperar(1400);
+  letras.forEach((l, i) => l.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 700, delay: i * 380, fill: "both" }));
+  await esperar(letras.length * 380 + 900);
   papelListo = performance.now();
 }
 

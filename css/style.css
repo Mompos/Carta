@@ -831,6 +831,30 @@ body.cerillas-visibles #pista {
   color: #6b4a22;
 }
 
+.papel.solo-fin .papel-texto {
+  padding: 10% 12%;
+}
+
+.papel.solo-fin .ultima-carta,
+.papel.solo-fin .final-titulo,
+.papel.solo-fin .final-huella {
+  display: none;
+}
+
+.papel.solo-fin .final-frase {
+  margin: 0;
+  font-size: 3.4em;
+  line-height: 1;
+}
+
+.papel.solo-fin .final-frase .letra {
+  display: inline-block;
+}
+
+.salpicadura {
+  transform-origin: center;
+}
+
 .sobre {
   transition: transform 0.4s ease-out, filter 0.4s ease-out;
 }

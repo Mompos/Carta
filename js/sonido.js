@@ -90,6 +90,68 @@ const sonido = (() => {
     setTimeout(() => elementoCancion && elementoCancion.pause(), segundos * 1000 + 200);
   }
 
+  let enojo = 0;
+  let enojoAplicado = 0;
+
+  function sentirRabia(r) {
+    const nivel = Math.max(0, (r - 0.35) / 0.65);
+    if (nivel > enojo) enojo += (nivel - enojo) * 0.15;
+  }
+
+  setInterval(() => {
+    enojo = Math.max(0, enojo - 0.035);
+    if (!musica || musicaApagada || !listo()) return;
+    if (Math.abs(enojo - enojoAplicado) < 0.01) return;
+    enojoAplicado = enojo;
+    const t = ac.currentTime;
+    musica.filtro.frequency.setTargetAtTime(18000 * Math.pow(700 / 18000, enojo * 0.85), t, 0.25);
+    musica.filtro.Q.setTargetAtTime(0.5 + enojo * 2.5, t, 0.25);
+  }, 200);
+
+  let pulso = 0;
+  let siguienteLatido = 0;
+  let relojLatidos = null;
+
+  function golpeCorazon(t, fuerza) {
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.frequency.setValueAtTime(110, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.14);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(fuerza, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g).connect(maestro);
+    o.start(t);
+    o.stop(t + 0.22);
+    const fuente = ac.createBufferSource();
+    fuente.buffer = ruido;
+    const fl = filtro("lowpass", 260, 1.2);
+    const gr = ac.createGain();
+    gr.gain.setValueAtTime(0.0001, t);
+    gr.gain.exponentialRampToValueAtTime(fuerza * 0.9, t + 0.01);
+    gr.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    fuente.connect(fl).connect(gr).connect(maestro);
+    fuente.start(t, Math.random() * 1.5);
+    fuente.stop(t + 0.12);
+  }
+
+  function latir() {
+    relojLatidos = null;
+    if (pulso <= 0 || !listo()) return;
+    const ahora = ac.currentTime;
+    if (siguienteLatido < ahora) siguienteLatido = ahora + 0.05;
+    const fuerza = 0.12 + 0.3 * pulso;
+    golpeCorazon(siguienteLatido, fuerza);
+    golpeCorazon(siguienteLatido + 0.24 - 0.06 * pulso, fuerza * 0.7);
+    siguienteLatido += 60 / (56 + 44 * pulso);
+    relojLatidos = setTimeout(latir, Math.max(50, (siguienteLatido - ac.currentTime - 0.1) * 1000));
+  }
+
+  function latidos(intensidad) {
+    pulso = Math.max(0, Math.min(1, intensidad));
+    if (pulso > 0 && !relojLatidos) latir();
+  }
+
   function lado(x) {
     if (!paneo || !paneo.pan) return;
     const p = Math.max(-1, Math.min(1, (x / window.innerWidth) * 2 - 1)) * 0.7;
@@ -226,6 +288,8 @@ const sonido = (() => {
   return {
     iniciar,
     lado,
+    sentirRabia,
+    latidos,
     agacharMusica,
     apagarMusica,
 

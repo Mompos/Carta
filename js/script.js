@@ -85,6 +85,7 @@ let estadoFinal = null;
 let fotosForzadas = false;
 
 function anotarRabia(rabia, ms) {
+  sonido.sentirRabia(rabia);
   registro.rabiaSuma += rabia * ms;
   registro.rabiaTiempo += ms;
 }

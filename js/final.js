@@ -452,6 +452,7 @@ function salpicar(l) {
   coronaYRebote(l);
   lanzarGotitas(l);
   lagrimaActual = l;
+  pulsoLagrimas();
 }
 
 function borrarLagrima(x, y) {
@@ -504,7 +505,15 @@ function frotarLagrima(e) {
   frote.y = e.clientY;
   if (!toco) return;
   sonido.goma(Math.min(1, 0.2 + distancia / 30));
+  pulsoLagrimas();
   if (l.borradas / l.tinta >= LIMPIEZA_NECESARIA) terminarLimpieza();
+}
+
+function pulsoLagrimas(l = lagrimaActual) {
+  const restante = l ? 1 - Math.min(1, l.borradas / (l.tinta * LIMPIEZA_NECESARIA)) : 0;
+  const n = l ? l.n : 0;
+  const calma = 1 - n / Math.max(1, FRAGMENTOS.length);
+  sonido.latidos((0.35 + 0.65 * calma) * (0.35 + 0.65 * restante));
 }
 
 function terminarLimpieza() {
@@ -512,6 +521,7 @@ function terminarLimpieza() {
   l.saliendo = true;
   lagrimaActual = null;
   aprender("lagrima");
+  pulsoLagrimas(l);
   pista.textContent = "";
   vibrar();
   l.lienzo.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 450, fill: "forwards" }).finished.then(() => l.lienzo.remove());
@@ -585,6 +595,7 @@ function ajustarPapel() {
 
 async function mostrarPapel() {
   estadoFinal = "papel";
+  sonido.latidos(0);
   pista.textContent = "";
   lluvia.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, fill: "forwards" });
 

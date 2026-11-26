@@ -739,24 +739,11 @@ body.cerillas-visibles #pista {
   pointer-events: none;
 }
 
-.lagrima,
 .lienzo-lagrima,
-.onda-lagrima {
+.efectos-gota {
   position: absolute;
   left: 0;
   top: 0;
-}
-
-.lagrima {
-  border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.95) 0 12%, rgba(205, 225, 245, 0.6) 30%, rgba(130, 165, 205, 0.35) 62%, rgba(90, 120, 160, 0.15) 100%);
-  box-shadow: inset -2px -3px 5px rgba(40, 60, 90, 0.35), 0 0 6px rgba(190, 215, 240, 0.35);
-  will-change: transform, filter, opacity;
-}
-
-.onda-lagrima {
-  border-radius: 50%;
-  border: 1.4px solid rgba(210, 228, 250, 0.7);
 }
 
 .ceniza {

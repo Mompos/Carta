@@ -106,16 +106,6 @@ function dibujarMancha(c, radio) {
     c.lineTo(Math.cos(a) * (radio + largo), Math.sin(a) * (radio + largo));
     c.lineTo(x1 - px, y1 - py);
     c.fill();
-    if (Math.random() < 0.75) {
-      const rr = radio * azar(0.05, 0.11);
-      const d = radio + largo + rr * 1.4;
-      c.beginPath();
-      c.arc(Math.cos(a) * d, Math.sin(a) * d, rr, 0, Math.PI * 2);
-      c.fill();
-      c.strokeStyle = borde;
-      c.lineWidth = 0.8;
-      c.stroke();
-    }
   });
 
   const degradado = c.createRadialGradient(-radio * 0.2, -radio * 0.25, 0, 0, 0, radio * 1.08);
@@ -138,14 +128,7 @@ function dibujarMancha(c, radio) {
   c.fill();
   c.restore();
 
-  for (let i = 0, n = Math.round(azar(4, 9)); i < n; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const d = radio * azar(1.5, 2.3);
-    c.beginPath();
-    c.arc(Math.cos(a) * d, Math.sin(a) * d, radio * azar(0.04, 0.1), 0, Math.PI * 2);
-    c.fillStyle = "rgba(170, 200, 238, 0.5)";
-    c.fill();
-  }
+  return puntas;
 }
 
 function crearLagrima(texto, radio) {
@@ -169,7 +152,7 @@ function crearLagrima(texto, radio) {
   lienzo_.style.height = alto_ + "px";
   const c = lienzo_.getContext("2d");
   c.setTransform(dpr, 0, 0, dpr, ancho_ / 2 * dpr, alto_ / 2 * dpr);
-  dibujarMancha(c, radio);
+  const puntas = dibujarMancha(c, radio);
 
   c.font = medidor.font;
   c.textAlign = "center";
@@ -199,7 +182,7 @@ function crearLagrima(texto, radio) {
       }
     }
   }
-  return { lienzo: lienzo_, c, ancho: ancho_, alto: alto_, celdas, columnas, filas, tinta, borradas: 0, caja: { w: anchoTexto + 16, h: altoTexto + 10 } };
+  return { lienzo: lienzo_, c, puntas, ancho: ancho_, alto: alto_, celdas, columnas, filas, tinta, borradas: 0, caja: { w: anchoTexto + 16, h: altoTexto + 10 } };
 }
 
 function soltarLagrima(n) {
@@ -219,49 +202,254 @@ function soltarLagrima(n) {
   l.lienzo.style.left = l.izq + "px";
   l.lienzo.style.top = l.arriba + "px";
 
-  const gota = document.createElement("i");
-  gota.className = "lagrima";
-  const lado = Math.max(14, radio * 0.55);
-  gota.style.width = gota.style.height = lado + "px";
-  lluvia.appendChild(gota);
-  const desde = `translate(${cx - lado / 2 + (cx - window.innerWidth / 2) * 0.45}px, ${cy - lado / 2 + (cy - window.innerHeight / 2) * 0.45}px) scale(4)`;
-  const hasta = `translate(${cx - lado / 2}px, ${cy - lado / 2}px) scale(0.6)`;
-  gota
-    .animate(
-      [
-        { transform: desde, filter: "blur(9px)", opacity: 0 },
-        { opacity: 0.55, offset: 0.25 },
-        { transform: hasta, filter: "blur(0px)", opacity: 0.95 },
-      ],
-      { duration: azar(650, 850), easing: "cubic-bezier(0.55, 0, 0.9, 0.45)", fill: "forwards" }
-    )
-    .finished.then(() => {
-      gota.remove();
-      if (estadoFinal !== "lagrimas") return;
+  caerGota(l);
+}
+
+// ---------- Caída y salpicadura ----------
+
+const efectos = document.createElement("canvas");
+efectos.className = "efectos-gota";
+const efx = efectos.getContext("2d");
+const animaciones = [];
+let pintando = false;
+
+function prepararEfectos() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (efectos.width !== Math.round(w * dpr) || efectos.height !== Math.round(h * dpr)) {
+    efectos.width = Math.round(w * dpr);
+    efectos.height = Math.round(h * dpr);
+    efectos.style.width = w + "px";
+    efectos.style.height = h + "px";
+  }
+  efx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (!efectos.isConnected) lluvia.appendChild(efectos);
+}
+
+function animarEfecto(paso) {
+  animaciones.push({ paso, inicio: performance.now() });
+  if (pintando) return;
+  pintando = true;
+  requestAnimationFrame(function cuadro(ahora) {
+    efx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    for (let i = animaciones.length - 1; i >= 0; i--) {
+      const a = animaciones[i];
+      if (estadoFinal !== "lagrimas" || a.paso(ahora - a.inicio) === false) animaciones.splice(i, 1);
+    }
+    if (animaciones.length) requestAnimationFrame(cuadro);
+    else {
+      efx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      pintando = false;
+    }
+  });
+}
+
+function esferaAgua(x, y, rx, ry, giro, alfa) {
+  efx.save();
+  efx.translate(x, y);
+  efx.rotate(giro);
+  efx.globalAlpha = alfa;
+  const cuerpo = efx.createRadialGradient(-rx * 0.3, -ry * 0.35, 0, 0, 0, Math.max(rx, ry));
+  cuerpo.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+  cuerpo.addColorStop(0.18, "rgba(220, 235, 250, 0.7)");
+  cuerpo.addColorStop(0.6, "rgba(140, 175, 215, 0.38)");
+  cuerpo.addColorStop(0.88, "rgba(70, 100, 140, 0.45)");
+  cuerpo.addColorStop(1, "rgba(200, 225, 250, 0.6)");
+  efx.fillStyle = cuerpo;
+  efx.beginPath();
+  efx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  efx.fill();
+  efx.fillStyle = "rgba(255, 255, 255, 0.5)";
+  efx.beginPath();
+  efx.ellipse(rx * 0.35, ry * 0.42, rx * 0.22, ry * 0.12, -0.6, 0, Math.PI * 2);
+  efx.fill();
+  efx.restore();
+}
+
+function sombraGota(x, y, r, alfa) {
+  const s = efx.createRadialGradient(x, y, 0, x, y, r);
+  s.addColorStop(0, `rgba(8, 5, 3, ${alfa})`);
+  s.addColorStop(1, "rgba(8, 5, 3, 0)");
+  efx.fillStyle = s;
+  efx.beginPath();
+  efx.arc(x, y, r, 0, Math.PI * 2);
+  efx.fill();
+}
+
+function caerGota(l) {
+  prepararEfectos();
+  const { cx, cy, radio } = l;
+  const lado = Math.max(8, radio * 0.3);
+  const x0 = cx + (cx - window.innerWidth / 2) * 0.35 + azar(-20, 20);
+  const y0 = cy + (cy - window.innerHeight / 2) * 0.35 + azar(-20, 20);
+  const duracion = azar(700, 900);
+  const fase = Math.random() * 6;
+  animarEfecto((t) => {
+    const f = Math.min(1, t / duracion);
+    const e = f * f;
+    const altura = 1 - e;
+    const x = x0 + (cx - x0) * e;
+    const y = y0 + (cy - y0) * e;
+    sombraGota(cx + altura * radio * 0.9, cy + altura * radio * 1.1, lado * (1.1 + altura * 2.4), 0.08 + 0.32 * (1 - altura));
+    const r = lado * (1 + altura * 3);
+    const temblor = Math.sin(t * 0.045 + fase) * 0.1 * (0.4 + altura);
+    esferaAgua(x, y, r * (1 + temblor), r * (1 - temblor), fase, Math.min(1, 0.25 + f * 1.6) * (0.55 + 0.45 * (1 - altura)));
+    if (f >= 1) {
       salpicar(l);
-    })
-    .catch(() => gota.remove());
+      return false;
+    }
+  });
+}
+
+function manchita(l, x, y, r, a, largo) {
+  const c = l.c;
+  const ancho_ = r + largo * 0.25;
+  c.save();
+  c.globalCompositeOperation = "destination-over";
+  c.translate(x, y);
+  c.rotate(a);
+  c.fillStyle = "rgba(160, 190, 230, 0.4)";
+  c.beginPath();
+  c.ellipse(-largo * 0.3, 0, ancho_, r * azar(0.75, 0.95), 0, 0, Math.PI * 2);
+  c.fill();
+  if (largo > r * 0.8) {
+    c.beginPath();
+    c.ellipse(-largo, 0, r * 0.45, r * 0.3, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalCompositeOperation = "source-over";
+  c.strokeStyle = "rgba(210, 228, 250, 0.5)";
+  c.lineWidth = 0.8;
+  c.beginPath();
+  c.ellipse(-largo * 0.3, 0, ancho_, r * 0.85, 0, 0, Math.PI * 2);
+  c.stroke();
+  c.fillStyle = "rgba(255, 255, 255, 0.3)";
+  c.beginPath();
+  c.arc(-r * 0.3, -r * 0.3, r * 0.3, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+function lanzarGotitas(l) {
+  const { cx, cy, radio } = l;
+  const limite = Math.min(l.ancho, l.alto) / 2 - radio * 0.15;
+  const gotitas = [];
+  l.puntas.forEach(({ a, largo }) => {
+    if (Math.random() < 0.85) gotitas.push({ a: a + azar(-0.05, 0.05), d: radio + largo + radio * azar(0.08, 0.2), r: radio * azar(0.05, 0.11), dur: azar(240, 380) });
+  });
+  for (let i = 0, n = Math.round(azar(7, 13)); i < n; i++) {
+    gotitas.push({ a: Math.random() * Math.PI * 2, d: radio * azar(1.35, 2.4), r: radio * azar(0.025, 0.08), dur: azar(320, 560) });
+  }
+  gotitas.forEach((g) => {
+    g.d = Math.min(g.d, limite - g.r * 2);
+    g.alto = azar(0.5, 1.1);
+    g.retraso = azar(0, 60);
+  });
+  let posadas = 0;
+  animarEfecto((t) => {
+    let vivas = 0;
+    gotitas.forEach((g) => {
+      const f = (t - g.retraso) / g.dur;
+      if (f < 0) {
+        vivas++;
+        return;
+      }
+      const cos = Math.cos(g.a);
+      const sin = Math.sin(g.a);
+      if (f < 1) {
+        vivas++;
+        const avance = 1 - Math.pow(1 - f, 2.2);
+        const d = radio * 0.55 + (g.d - radio * 0.55) * avance;
+        const h = Math.sin(Math.PI * f) * g.alto;
+        const x = cx + cos * d;
+        const y = cy + sin * d;
+        sombraGota(x + h * g.r * 3, y + h * g.r * 3.6, g.r * (1.4 + h), 0.25 * (1 - h * 0.6));
+        const estirada = 1 + (1 - f) * 0.9;
+        esferaAgua(x, y, g.r * (1 + h * 0.8) * estirada, (g.r * (1 + h * 0.8)) / Math.sqrt(estirada), g.a, 0.9);
+      } else if (!g.posada) {
+        g.posada = true;
+        posadas++;
+        manchita(l, cx - l.izq - l.ancho / 2 + cos * g.d, cy - l.arriba - l.alto / 2 + sin * g.d, g.r, g.a, g.r * azar(0.6, 1.8));
+        g.onda = t;
+      }
+      if (g.posada && t - g.onda < 260) {
+        vivas++;
+        const o = (t - g.onda) / 260;
+        efx.strokeStyle = `rgba(215, 232, 252, ${0.6 * (1 - o)})`;
+        efx.lineWidth = 0.8;
+        efx.beginPath();
+        efx.arc(cx + cos * g.d, cy + sin * g.d, g.r * (1 + o * 2.2), 0, Math.PI * 2);
+        efx.stroke();
+      }
+    });
+    if (posadas >= 3 && !lanzarGotitas.sono) {
+      lanzarGotitas.sono = true;
+      sonido.gota(false);
+    }
+    if (vivas === 0) lanzarGotitas.sono = false;
+    return vivas > 0;
+  });
+}
+
+function coronaYRebote(l) {
+  const { cx, cy, radio } = l;
+  const dientes = Array.from({ length: 22 }, (_, i) => ({ a: (i / 22) * Math.PI * 2 + azar(-0.1, 0.1), largo: azar(0.6, 1.4) }));
+  animarEfecto((t) => {
+    if (t < 280) {
+      const f = t / 280;
+      const r = radio * (0.45 + 0.8 * (1 - Math.pow(1 - f, 2)));
+      efx.save();
+      efx.globalAlpha = 1 - f;
+      efx.strokeStyle = "rgba(230, 242, 255, 0.8)";
+      efx.lineWidth = radio * 0.08 * (1 - f) + 0.6;
+      efx.beginPath();
+      efx.arc(cx, cy, r, 0, Math.PI * 2);
+      efx.stroke();
+      efx.fillStyle = "rgba(235, 245, 255, 0.85)";
+      dientes.forEach(({ a, largo }) => {
+        const sube = Math.sin(Math.PI * f) * radio * 0.18 * largo;
+        efx.beginPath();
+        efx.arc(cx + Math.cos(a) * (r + sube), cy + Math.sin(a) * (r + sube), radio * 0.035 * largo * (1 - f * 0.5) + 0.5, 0, Math.PI * 2);
+        efx.fill();
+      });
+      efx.restore();
+    }
+    if (t > 90 && t < 640) {
+      const f = (t - 90) / 550;
+      const h = Math.sin(Math.PI * f);
+      const r = radio * 0.09 * (1 + h * 1.3);
+      sombraGota(cx + h * radio * 0.35, cy + h * radio * 0.42, r * 1.6, 0.2);
+      esferaAgua(cx, cy, r, r, 0, 0.85);
+    }
+    [0, 200].forEach((retraso) => {
+      const o = (t - retraso) / 1100;
+      if (o < 0 || o > 1) return;
+      efx.strokeStyle = `rgba(210, 228, 250, ${0.7 * (1 - o)})`;
+      efx.lineWidth = 1.4 * (1 - o) + 0.4;
+      efx.beginPath();
+      efx.arc(cx, cy, radio * (0.6 + 1.9 * (1 - Math.pow(1 - o, 2))), 0, Math.PI * 2);
+      efx.stroke();
+    });
+    return t < 1300;
+  });
 }
 
 function salpicar(l) {
   sonido.gota(true);
   vibrar();
-  lluvia.appendChild(l.lienzo);
+  lluvia.insertBefore(l.lienzo, efectos);
   l.lienzo.animate(
     [
-      { transform: "scale(0.3)", opacity: 0 },
-      { transform: "scale(1.06)", opacity: 1, offset: 0.6 },
+      { transform: "scale(0.25)", opacity: 0.4 },
+      { transform: "scale(1.07)", opacity: 1, offset: 0.55 },
+      { transform: "scale(0.98)", offset: 0.8 },
       { transform: "scale(1)", opacity: 1 },
     ],
-    { duration: 420, easing: "ease-out" }
+    { duration: 460, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" }
   );
-  const onda = document.createElement("i");
-  onda.className = "onda-lagrima";
-  const lado = l.radio * 2;
-  Object.assign(onda.style, { width: lado + "px", height: lado + "px", left: l.cx - l.radio + "px", top: l.cy - l.radio + "px" });
-  lluvia.appendChild(onda);
-  onda.animate([{ transform: "scale(0.6)", opacity: 0.9 }, { transform: "scale(2.5)", opacity: 0 }], { duration: 1100, easing: "ease-out", fill: "forwards" }).finished.then(() => onda.remove());
-
+  coronaYRebote(l);
+  lanzarGotitas(l);
   lagrimaActual = l;
 }
 

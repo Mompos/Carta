@@ -707,9 +707,7 @@ body.cerillas-visibles #pista {
 }
 
 .lagrima,
-.mancha,
-.onda,
-.gotita,
+.salpicadura,
 .frase-lagrima {
   position: absolute;
   left: 0;
@@ -717,41 +715,27 @@ body.cerillas-visibles #pista {
 }
 
 .lagrima {
-  width: 26px;
-  height: 26px;
   border-radius: 50%;
   background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.95) 0 12%, rgba(205, 225, 245, 0.6) 30%, rgba(130, 165, 205, 0.35) 62%, rgba(90, 120, 160, 0.15) 100%);
   box-shadow: inset -2px -3px 5px rgba(40, 60, 90, 0.35), 0 0 6px rgba(190, 215, 240, 0.35);
   will-change: transform, filter, opacity;
 }
 
-.mancha {
-  border-radius: 48% 52% 50% 47% / 52% 47% 53% 48%;
-  background:
-    radial-gradient(ellipse at 34% 28%, rgba(255, 255, 255, 0.16), transparent 22%),
-    radial-gradient(ellipse at center, rgba(90, 120, 160, 0.16) 0 58%, rgba(170, 200, 235, 0.3) 66%, rgba(120, 150, 190, 0.08) 70%, transparent 71%);
-}
-
-.onda {
-  border-radius: 50%;
-  border: 1.5px solid rgba(200, 220, 245, 0.55);
-}
-
-.gotita {
-  border-radius: 50%;
-  background: rgba(215, 230, 250, 0.85);
+.salpicadura {
+  overflow: visible;
 }
 
 .frase-lagrima {
-  max-width: min(76vw, 420px);
+  z-index: 1;
+  max-width: min(72vw, 400px);
   width: max-content;
   margin: 0;
   text-align: center;
   font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
   font-size: clamp(22px, 6.2vw, 30px);
   line-height: 1.15;
-  color: #e9e0cc;
-  text-shadow: 0 0 8px rgba(120, 160, 210, 0.45);
+  color: #efe6d3;
+  text-shadow: 0 0 10px rgba(20, 30, 45, 0.9), 0 0 4px rgba(20, 30, 45, 0.9);
   opacity: 0;
 }
 

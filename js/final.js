@@ -106,106 +106,200 @@ function llorar() {
   })();
 }
 
+const SVG = "http://www.w3.org/2000/svg";
+const activas = [];
+let numeroGota = 0;
+
+function azar(a, b) {
+  return a + Math.random() * (b - a);
+}
+
 function zonaLluvia() {
-  const caja = escenario.getBoundingClientRect();
-  const margen = 16;
-  return { izq: caja.left + margen, der: caja.right - margen, arriba: caja.top + margen, abajo: caja.bottom - margen };
+  const arriba = document.querySelector("header").getBoundingClientRect().bottom + 10;
+  const abajo = document.querySelector("footer").getBoundingClientRect().top - 6;
+  return { izq: 14, der: window.innerWidth - 14, arriba, abajo };
+}
+
+function escalaGotas() {
+  return Math.min(1.35, Math.max(0.8, Math.min(window.innerWidth, window.innerHeight * 0.62) / 375));
+}
+
+function buscarLugar(radio, cajaTexto) {
+  const zona = zonaLluvia();
+  const ahora = performance.now();
+  for (let i = activas.length - 1; i >= 0; i--) if (activas[i].hasta < ahora) activas.splice(i, 1);
+  const medioAncho = Math.max(radio, cajaTexto ? cajaTexto.w / 2 : 0);
+  const medioAlto = Math.max(radio, cajaTexto ? cajaTexto.h / 2 : 0);
+  let mejor = null;
+  let mejorPuntaje = -Infinity;
+  for (let intento = 0; intento < 40; intento++) {
+    const x = azar(zona.izq + medioAncho, Math.max(zona.izq + medioAncho, zona.der - medioAncho));
+    const y = azar(zona.arriba + medioAlto, Math.max(zona.arriba + medioAlto, zona.abajo - medioAlto));
+    let puntaje = Infinity;
+    activas.forEach((a) => {
+      const holgura = Math.hypot(x - a.x, y - a.y) - (radio + a.radio);
+      let choqueTexto = Infinity;
+      if (cajaTexto && a.caja) {
+        const dx = Math.abs(x - a.x) - (cajaTexto.w + a.caja.w) / 2;
+        const dy = Math.abs(y - a.y) - (cajaTexto.h + a.caja.h) / 2;
+        choqueTexto = Math.max(dx, dy);
+      }
+      puntaje = Math.min(puntaje, holgura, choqueTexto * 1.5);
+    });
+    if (puntaje > mejorPuntaje) {
+      mejorPuntaje = puntaje;
+      mejor = { x, y };
+    }
+    if (puntaje > 30) break;
+  }
+  return mejor;
 }
 
 function soltarLagrima(texto, n, pausa) {
-  const zona = zonaLluvia();
-  const alto_ = zona.abajo - zona.arriba;
+  const escala = escalaGotas();
+  const radio = (texto ? azar(40, 60) : Math.random() < 0.6 ? azar(10, 22) : azar(24, 38)) * escala;
   let frase = null;
-  let ancho_ = 60;
+  let caja = null;
   if (texto) {
     frase = document.createElement("p");
     frase.className = "frase-lagrima";
     frase.textContent = texto;
     lluvia.appendChild(frase);
-    ancho_ = frase.offsetWidth;
+    caja = { w: frase.offsetWidth + 16, h: frase.offsetHeight + 10 };
   }
-  const franjas = 4;
-  const fila = texto ? n % franjas : Math.floor(Math.random() * franjas);
-  const cy = zona.arriba + ((fila + 0.5) * alto_) / franjas + (Math.random() - 0.5) * (alto_ / franjas) * 0.3;
-  const libre = Math.max(0, zona.der - zona.izq - ancho_);
-  const cx = zona.izq + ancho_ / 2 + Math.random() * libre;
-  const centroX = window.innerWidth / 2;
-  const centroY = window.innerHeight / 2;
+  const { x: cx, y: cy } = buscarLugar(radio * 2.2, caja);
+  const vida = frase ? Math.min(16000, pausa * 3.4) : azar(4500, 8000);
+  activas.push({ x: cx, y: cy, radio: radio * 1.5, caja, hasta: performance.now() + vida * 0.8 });
+  if (frase) frase.style.transform = `translate(${cx - frase.offsetWidth / 2}px, ${cy - frase.offsetHeight / 2}px)`;
 
   const gota = document.createElement("i");
   gota.className = "lagrima";
+  const lado = Math.max(14, radio * 0.55);
+  gota.style.width = gota.style.height = lado + "px";
   lluvia.appendChild(gota);
-  const lado = 26;
-  const desde = `translate(${cx - lado / 2 + (cx - centroX) * 0.4}px, ${cy - lado / 2 + (cy - centroY) * 0.4}px) scale(3.4)`;
-  const hasta = `translate(${cx - lado / 2}px, ${cy - lado / 2}px) scale(0.45)`;
+  const centroX = window.innerWidth / 2;
+  const centroY = window.innerHeight / 2;
+  const desde = `translate(${cx - lado / 2 + (cx - centroX) * 0.45}px, ${cy - lado / 2 + (cy - centroY) * 0.45}px) scale(4)`;
+  const hasta = `translate(${cx - lado / 2}px, ${cy - lado / 2}px) scale(0.6)`;
   gota
     .animate(
       [
-        { transform: desde, filter: "blur(7px)", opacity: 0 },
-        { opacity: 0.6, offset: 0.2 },
+        { transform: desde, filter: "blur(9px)", opacity: 0 },
+        { opacity: 0.55, offset: 0.25 },
         { transform: hasta, filter: "blur(0px)", opacity: 0.95 },
       ],
-      { duration: 800, easing: "cubic-bezier(0.55, 0, 0.9, 0.45)", fill: "forwards" }
+      { duration: azar(650, 850), easing: "cubic-bezier(0.55, 0, 0.9, 0.45)", fill: "forwards" }
     )
     .finished.then(() => {
       gota.remove();
-      salpicar(cx, cy, frase, ancho_, pausa);
+      salpicar(cx, cy, radio, frase, vida);
     })
     .catch(() => gota.remove());
-  if (frase) frase.style.transform = `translate(${cx - ancho_ / 2}px, ${cy - frase.offsetHeight / 2}px)`;
 }
 
-function salpicar(cx, cy, frase, ancho_, pausa) {
+function contornoIrregular(radio, puntas) {
+  const n = 18;
+  const fase = Math.random() * 6.3;
+  const pts = Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2;
+    const r = radio * (1 + 0.1 * Math.sin(a * 3 + fase) + 0.07 * Math.sin(a * 5 + fase * 2) + azar(-0.05, 0.05));
+    return [Math.cos(a) * r, Math.sin(a) * r];
+  });
+  puntas.forEach(({ a, largo }) => {
+    const i = Math.round((a / (Math.PI * 2)) * n) % n;
+    pts[i] = [Math.cos(a) * (radio + largo * 0.35), Math.sin(a) * (radio + largo * 0.35)];
+  });
+  const medio = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+  let d = `M${medio(pts[n - 1], pts[0]).map((v) => v.toFixed(1)).join(" ")}`;
+  for (let i = 0; i < n; i++) {
+    const m = medio(pts[i], pts[(i + 1) % n]);
+    d += ` Q${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)} ${m[0].toFixed(1)} ${m[1].toFixed(1)}`;
+  }
+  return d + " Z";
+}
+
+function nodo(tipo, atributos, padre) {
+  const el = document.createElementNS(SVG, tipo);
+  Object.entries(atributos).forEach(([k, v]) => el.setAttribute(k, v));
+  if (padre) padre.appendChild(el);
+  return el;
+}
+
+function salpicar(cx, cy, radio, frase, vida) {
   if (estadoFinal !== "lagrimas" && estadoFinal !== "papel") return;
-  sonido.gota(!!frase);
-  vibrar();
-  const vida = frase ? Math.min(16000, pausa * 3.4) : 5000;
-  const crear = (clase, w, h) => {
-    const el = document.createElement("i");
-    el.className = clase;
-    el.style.width = w + "px";
-    el.style.height = h + "px";
-    el.style.left = cx - w / 2 + "px";
-    el.style.top = cy - h / 2 + "px";
-    lluvia.insertBefore(el, lluvia.firstChild);
-    return el;
-  };
+  sonido.gota(radio > 26);
+  if (frase) vibrar();
+  const id = "g" + numeroGota++;
+  const alcance = radio * 2.6;
+  const lado = alcance * 2;
+  const svg = nodo("svg", { class: "salpicadura", width: lado, height: lado, viewBox: `${-alcance} ${-alcance} ${lado} ${lado}` });
+  svg.style.left = cx - alcance + "px";
+  svg.style.top = cy - alcance + "px";
 
-  const tam = frase ? Math.max(100, ancho_ * 1.05) : 40 + Math.random() * 26;
-  const mancha = crear("mancha", tam, frase ? Math.max(80, Math.min(tam * 0.5, frase.offsetHeight + 60)) : tam * 0.9);
-  mancha.animate(
-    [
-      { transform: "scale(0.15)", opacity: 0 },
-      { transform: "scale(1)", opacity: 1, offset: 0.08 },
-      { transform: "scale(1.04)", opacity: 1, offset: 0.75 },
-      { transform: "scale(1.06)", opacity: 0 },
-    ],
-    { duration: vida, easing: "ease-out", fill: "forwards" }
-  ).finished.then(() => mancha.remove()).catch(() => {});
+  const defs = nodo("defs", {}, svg);
+  const degradado = nodo("radialGradient", { id, gradientUnits: "userSpaceOnUse", cx: 0, cy: 0, r: (radio * 1.08).toFixed(1), fx: (-radio * 0.2).toFixed(1), fy: (-radio * 0.25).toFixed(1) }, defs);
+  [
+    ["0", "rgba(80, 110, 150, 0.12)"],
+    ["0.78", "rgba(95, 128, 170, 0.2)"],
+    ["0.93", "rgba(165, 195, 232, 0.4)"],
+    ["1", "rgba(210, 228, 250, 0.5)"],
+  ].forEach(([offset, color]) => nodo("stop", { offset, "stop-color": color }, degradado));
 
-  [0, 170].forEach((retraso) => {
-    const onda = crear("onda", 40, 40);
-    onda.animate(
-      [
-        { transform: "scale(0.2)", opacity: 0.8 },
-        { transform: `scale(${frase ? 4 : 2.6})`, opacity: 0 },
-      ],
-      { duration: 1100, delay: retraso, easing: "ease-out", fill: "both" }
-    ).finished.then(() => onda.remove()).catch(() => {});
+  const puntas = Array.from({ length: Math.round(azar(6, 11)) }, () => ({ a: Math.random() * Math.PI * 2, largo: radio * azar(0.2, 0.85) }));
+
+  const corona = nodo("g", { class: "corona" }, svg);
+  puntas.forEach(({ a, largo }) => {
+    const ancho_ = radio * azar(0.05, 0.12);
+    const x1 = Math.cos(a) * radio * 0.98;
+    const y1 = Math.sin(a) * radio * 0.98;
+    const x2 = Math.cos(a) * (radio + largo);
+    const y2 = Math.sin(a) * (radio + largo);
+    const px = -Math.sin(a) * ancho_;
+    const py = Math.cos(a) * ancho_;
+    nodo("path", { d: `M${(x1 + px).toFixed(1)} ${(y1 + py).toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)} L${(x1 - px).toFixed(1)} ${(y1 - py).toFixed(1)} Z`, fill: "rgba(160, 190, 230, 0.34)" }, corona);
+    if (Math.random() < 0.75) {
+      const rr = radio * azar(0.05, 0.11);
+      nodo("circle", { cx: (Math.cos(a) * (radio + largo + rr * 1.4)).toFixed(1), cy: (Math.sin(a) * (radio + largo + rr * 1.4)).toFixed(1), r: rr.toFixed(1), fill: "rgba(150, 182, 225, 0.32)", stroke: "rgba(205,225,248,0.5)", "stroke-width": "0.8" }, corona);
+    }
   });
 
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 7) * Math.PI * 2 + Math.random() * 0.6;
-    const d = 18 + Math.random() * 26;
-    const gotita = crear("gotita", 4, 4);
-    gotita.animate(
-      [
-        { transform: "translate(0, 0) scale(1)", opacity: 0.9 },
-        { transform: `translate(${Math.cos(a) * d}px, ${Math.sin(a) * d}px) scale(0.4)`, opacity: 0 },
-      ],
-      { duration: 520, easing: "ease-out", fill: "both" }
-    ).finished.then(() => gotita.remove()).catch(() => {});
-  }
+  const mancha = nodo("g", { class: "mancha-agua" }, svg);
+  nodo("path", { d: contornoIrregular(radio, puntas), fill: `url(#${id})`, stroke: "rgba(210, 228, 250, 0.55)", "stroke-width": "1.2" }, mancha);
+  nodo("ellipse", { cx: (-radio * 0.32).toFixed(1), cy: (-radio * 0.36).toFixed(1), rx: (radio * 0.28).toFixed(1), ry: (radio * 0.16).toFixed(1), fill: "rgba(255,255,255,0.22)", transform: "rotate(-28)" }, mancha);
+
+  const satelites = nodo("g", {}, svg);
+  const gotitas = Array.from({ length: Math.round(azar(4, 9)) }, () => {
+    const a = Math.random() * Math.PI * 2;
+    const d = radio * azar(1.5, 2.4);
+    const c = nodo("circle", { cx: 0, cy: 0, r: (radio * azar(0.04, 0.1)).toFixed(1), fill: "rgba(170, 200, 238, 0.5)", stroke: "rgba(220, 235, 252, 0.6)", "stroke-width": "0.7" }, satelites);
+    return { c, x: Math.cos(a) * d, y: Math.sin(a) * d };
+  });
+
+  const onda = nodo("circle", { cx: 0, cy: 0, r: radio.toFixed(1), fill: "none", stroke: "rgba(210, 228, 250, 0.7)", "stroke-width": "1.4" }, svg);
+  lluvia.insertBefore(svg, lluvia.firstChild);
+
+  [mancha, corona, onda].forEach((g) => {
+    g.style.transformBox = "view-box";
+    g.style.transformOrigin = "0px 0px";
+  });
+  mancha.animate([{ transform: "scale(0.25)" }, { transform: "scale(1.08)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 380, easing: "ease-out", fill: "both" });
+  corona.animate(
+    [
+      { transform: "scale(0.3)", opacity: 0 },
+      { transform: "scale(1.12)", opacity: 1, offset: 0.45 },
+      { transform: "scale(1)", opacity: 0.55 },
+    ],
+    { duration: 520, easing: "ease-out", fill: "both" }
+  );
+  gotitas.forEach(({ c, x, y }) =>
+    c.animate([{ transform: "translate(0px, 0px)", opacity: 0 }, { transform: `translate(${x}px, ${y}px)`, opacity: 1 }], { duration: azar(260, 420), easing: "cubic-bezier(0.2, 0.7, 0.3, 1)", fill: "both" })
+  );
+  onda.animate([{ transform: "scale(0.6)", opacity: 0.9 }, { transform: "scale(2.5)", opacity: 0 }], { duration: 1100, easing: "ease-out", fill: "both" });
+
+  svg.animate(
+    [{ opacity: 1 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }],
+    { duration: vida, easing: "ease-in", fill: "forwards" }
+  ).finished.then(() => svg.remove()).catch(() => {});
 
   if (frase) {
     frase.animate(
@@ -215,7 +309,7 @@ function salpicar(cx, cy, frase, ancho_, pausa) {
         { opacity: 1, filter: "blur(0px)", offset: 0.72 },
         { opacity: 0, filter: "blur(2px)" },
       ],
-      { duration: vida, delay: 200, fill: "both" }
+      { duration: vida, delay: 250, fill: "both" }
     ).finished.then(() => frase.remove()).catch(() => {});
   }
 }

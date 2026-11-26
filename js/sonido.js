@@ -126,10 +126,6 @@ const sonido = (() => {
       if (c) c.f.frequency.setTargetAtTime(650 + 700 * rabia, ac.currentTime, 0.05);
     },
 
-    rasgon() {
-      rafaga({ dur: 0.18, tipo: "bandpass", f: 1200, f2: 3500, q: 0.8, nivel: 0.35 });
-    },
-
     cera() {
       continuo("cera", 0.22, "bandpass", 1500, 1.4);
     },

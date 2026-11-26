@@ -81,7 +81,7 @@ function catalogoPistas() {
       const ultima = actual === paginas.length - 1;
       lista.push({ nombre: "pasar", texto: ultima ? "Desliza a la izquierda para ver las fotos" : "Desliza a la izquierda para pasar la página", puntos: [[c.r.right - c.w * 0.12, c.y], [c.r.left + c.w * 0.12, c.y]], rapido: true });
       lista.push({ nombre: "cortar", texto: "Desliza hacia abajo para cortarla", puntos: [[c.x, c.r.top + c.h * 0.1], [c.x + c.w * 0.04, c.r.bottom - c.h * 0.1]], rapido: true });
-      lista.push({ nombre: "arrugar", texto: "Deja el dedo quieto para arrugarla", puntos: [[c.x, c.y]], quieto: true });
+      lista.push({ nombre: "arrugar", texto: actual > 0 ? "Deja el dedo quieto para arrugarla y volver atrás" : "Deja el dedo quieto para arrugarla", puntos: [[c.x, c.y]], quieto: true });
     }
   }
 

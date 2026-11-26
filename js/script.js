@@ -101,7 +101,13 @@ function colorTinta(rabia) {
 }
 
 const DPR = Math.min(2, window.devicePixelRatio || 1);
-const MAX_PARTICULAS = 180;
+const MAX_PARTICULAS = 140;
+const LENGUAS = 34;
+const CAPAS_LLAMA = [
+  { ancho: 1.8, alto: 1.15, colores: ["rgba(255, 120, 30, 0.32)", "rgba(255, 70, 10, 0.18)", "rgba(200, 40, 0, 0)"] },
+  { ancho: 1, alto: 1, colores: ["rgba(255, 200, 90, 0.75)", "rgba(255, 130, 30, 0.55)", "rgba(255, 70, 10, 0)"] },
+  { ancho: 0.45, alto: 0.55, colores: ["rgba(255, 252, 225, 0.95)", "rgba(255, 220, 120, 0.7)", "rgba(255, 160, 50, 0)"] },
+];
 
 function circuloDifuso(c, x, y, r, centro, borde) {
   const degradado = c.createRadialGradient(x, y, 0, x, y, r);
@@ -286,36 +292,6 @@ function borrarEn(x, y, r, rabia = 0.3) {
   circuloDifuso(ctx, x, y, r, `rgba(110,95,70,${(0.02 + 0.07 * rabia).toFixed(3)})`, "rgba(110,95,70,0)");
 }
 
-function dibujarRasgon(puntos) {
-  ctx.lineCap = "round";
-  ctx.lineWidth = Math.max(1.5, fuente * 0.09);
-  ctx.beginPath();
-  puntos.forEach(([x, y], i) => (i ? ctx.lineTo(x * ancho, y * ancho) : ctx.moveTo(x * ancho, y * ancho)));
-  estiloMesa(ctx, origen.x, origen.y).forEach((capa) => {
-    ctx.strokeStyle = capa;
-    ctx.stroke();
-  });
-  ctx.strokeStyle = "rgba(255, 250, 235, 0.7)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  puntos.forEach(([x, y], i) => (i ? ctx.lineTo(x * ancho + 1.5, y * ancho + 1.5) : ctx.moveTo(x * ancho + 1.5, y * ancho + 1.5)));
-  ctx.stroke();
-}
-
-function rasgarPapel(x, y) {
-  const largo = fuente * (0.8 + Math.random() * 0.8);
-  const angulo = Math.random() * Math.PI;
-  const puntos = [];
-  for (let i = 0; i <= 5; i++) {
-    const d = (i / 5 - 0.5) * largo;
-    const quiebre = (Math.random() - 0.5) * fuente * 0.25;
-    puntos.push([(x + Math.cos(angulo) * d - Math.sin(angulo) * quiebre) / ancho, (y + Math.sin(angulo) * d + Math.cos(angulo) * quiebre) / ancho]);
-  }
-  trazos.push({ tipo: "rasgon", puntos });
-  dibujarRasgon(puntos);
-  sonido.rasgon();
-}
-
 function enPixeles(puntos) {
   return puntos.map(([x, y, w, rabia]) => [x * ancho, y * ancho, w * ancho, rabia]);
 }
@@ -326,8 +302,6 @@ function redibujar() {
     if (t.tipo === "linea") {
       const pix = enPixeles(t.puntos);
       for (let i = 1; i < pix.length; i++) dibujarTramo(pix, i);
-    } else if (t.tipo === "rasgon") {
-      dibujarRasgon(t.puntos);
     } else {
       borrarEn(t.x * ancho, t.y * ancho, t.r * ancho, t.rabia);
     }
@@ -411,7 +385,6 @@ function rayar(dedo, a, b) {
   sonido.pluma(rabia);
   const temblor = fuente * (0.02 + 0.3 * rabia);
   agregarPunto(dedo.trazo, b.x + (Math.random() - 0.5) * temblor, b.y + (Math.random() - 0.5) * temblor, grosor, rabia);
-  if (rabia > 0.8 && Math.random() < 0.035 && trazos.filter((t) => t.tipo === "rasgon").length < 14) rasgarPapel(b.x, b.y);
 
   const holgura = Math.max(fuente * 0.15, b.contacto * 0.25);
   palabrasEn(b.x, b.y, holgura).forEach((p) => {
@@ -723,21 +696,8 @@ async function arrugar() {
   ).finished;
 
   limpiarForma();
-  if (fotosQuemadas) {
-    cargarPagina("puente");
-  } else {
-    cargarPagina(actual);
-    mostrarReverso();
-  }
-  await entrar([{ opacity: 0, transform: "translateY(18px) scale(0.97)" }, { opacity: 1, transform: "none" }]);
-  mostrarCerillas();
-}
-
-function mostrarReverso() {
-  volteada = true;
-  carta.classList.add("volteada");
-  registro.volteos++;
-  registro.inicioReverso = performance.now();
+  cargarPagina(Math.max(0, actual - 1));
+  await entrar([{ opacity: 0, transform: "translateX(-40px) rotate(-3deg)" }, { opacity: 1, transform: "none" }]);
 }
 
 async function irAFotos() {
@@ -1681,6 +1641,7 @@ function encenderPuente(x, y, furia = 0.3) {
     ultimo: ahora,
     fases: [Math.random() * 6.3, Math.random() * 6.3, Math.random() * 6.3],
     particulas: [],
+    humo: [],
     consumido: false,
     furia,
   };
@@ -1733,37 +1694,98 @@ function arder(ahora) {
     rellenarMesa(qctx, origen.x, origen.y);
   } else {
     calcularRadios(ahora);
-    contornoFuego(fuente * 1.8);
-    qctx.fillStyle = "rgba(90, 50, 15, 0.28)";
+    const f = fuente;
+    [[2.6, 0.08], [2, 0.1], [1.45, 0.14]].forEach(([extra, alfa]) => {
+      contornoFuego(f * extra);
+      qctx.fillStyle = `rgba(120, 66, 22, ${alfa})`;
+      qctx.fill();
+    });
+    contornoFuego(f * 0.85);
+    qctx.fillStyle = "rgba(48, 22, 8, 0.88)";
     qctx.fill();
-    contornoFuego(fuente * 0.8);
-    qctx.fillStyle = "rgba(45, 22, 8, 0.85)";
-    qctx.fill();
-    contornoFuego(fuente * 0.55);
-    qctx.fillStyle = "rgba(255, 120, 30, 0.4)";
-    qctx.fill();
-    contornoFuego(fuente * 0.22);
-    qctx.fillStyle = "#ff8c26";
+    contornoFuego(f * 0.45);
+    qctx.fillStyle = "rgba(18, 8, 3, 0.95)";
     qctx.fill();
     contornoFuego(0);
     rellenarMesa(qctx, origen.x, origen.y);
 
-    const nuevas = Math.min(MAX_PARTICULAS - fuego.particulas.length, Math.round((dt / 16) * 4));
+    qctx.globalCompositeOperation = "lighter";
+    const parpadeo = 0.8 + Math.random() * 0.4;
+    contornoFuego(f * 0.18);
+    qctx.strokeStyle = "rgba(255, 110, 30, 0.38)";
+    qctx.lineWidth = f * 0.34 * parpadeo;
+    qctx.stroke();
+    qctx.strokeStyle = "rgba(255, 210, 140, 0.55)";
+    qctx.lineWidth = f * 0.05;
+    qctx.stroke();
+
+    const giroLenguas = ahora * 0.00015;
+    for (let i = 0; i < LENGUAS; i++) {
+      const a = (i / LENGUAS) * Math.PI * 2 + giroLenguas;
+      const indice = Math.round((((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * LADOS_FUEGO) % LADOS_FUEGO;
+      const r = radiosFuego[indice] + f * 0.3;
+      const bx = fuego.x + Math.cos(a) * r;
+      const by = fuego.y + Math.sin(a) * r;
+      if (bx < -f || bx > ancho + f || by < -f || by > alto + f) continue;
+      const vaiven = Math.sin(ahora * 0.008 + i * 2.3) + 0.4 * Math.sin(ahora * 0.021 + i);
+      const alto0 = f * (0.6 + 0.9 * (0.5 + 0.5 * Math.sin(ahora * 0.012 + i * 1.7)) + 0.35 * Math.random()) * (1 + fuego.furia * 0.6);
+      const ancho0 = f * (0.2 + 0.1 * Math.sin(i * 3.1));
+
+      const brillo = qctx.createRadialGradient(bx, by, 0, bx, by, f * 0.8);
+      brillo.addColorStop(0, "rgba(255, 150, 50, 0.22)");
+      brillo.addColorStop(1, "rgba(255, 150, 50, 0)");
+      qctx.fillStyle = brillo;
+      qctx.beginPath();
+      qctx.arc(bx, by, f * 0.8, 0, Math.PI * 2);
+      qctx.fill();
+
+      CAPAS_LLAMA.forEach((capa) => {
+        const alto_ = alto0 * capa.alto;
+        const ancho_ = ancho0 * capa.ancho;
+        const punta = [bx + vaiven * f * 0.32 * capa.alto, by - alto_];
+        const degradado = qctx.createLinearGradient(bx, by + ancho_ * 0.3, punta[0], punta[1]);
+        degradado.addColorStop(0, capa.colores[0]);
+        degradado.addColorStop(0.45, capa.colores[1]);
+        degradado.addColorStop(1, capa.colores[2]);
+        qctx.fillStyle = degradado;
+        qctx.beginPath();
+        qctx.moveTo(bx - ancho_, by);
+        qctx.bezierCurveTo(bx - ancho_ * 1.1, by - alto_ * 0.35, punta[0] - ancho_ * 0.5 - vaiven * f * 0.1, by - alto_ * 0.7, punta[0], punta[1]);
+        qctx.bezierCurveTo(punta[0] + ancho_ * 0.4, by - alto_ * 0.65, bx + ancho_ * 1.1, by - alto_ * 0.3, bx + ancho_, by);
+        qctx.quadraticCurveTo(bx, by + ancho_ * 0.7, bx - ancho_, by);
+        qctx.fill();
+      });
+    }
+    qctx.globalCompositeOperation = "source-over";
+
+    const nuevas = Math.min(MAX_PARTICULAS - fuego.particulas.length, Math.round((dt / 16) * 3));
     for (let k = 0; k < nuevas; k++) {
       const i = Math.floor(Math.random() * LADOS_FUEGO);
-      const r = radiosFuego[i] + fuente * 0.2;
+      const r = radiosFuego[i] + f * 0.25;
       const px = fuego.x + angulosFuego[i].cos * r;
       const py = fuego.y + angulosFuego[i].sin * r;
       if (px < 0 || px > ancho || py < 0 || py > alto) continue;
+      const tipo = Math.random();
       fuego.particulas.push({
-        x: px, y: py,
-        vx: (Math.random() - 0.5) * 0.03,
-        vy: -(0.04 + Math.random() * 0.08),
+        x: px,
+        y: py,
+        vx: (Math.random() - 0.5) * 0.04,
+        vy: -(0.05 + Math.random() * 0.1),
         vida: 0,
-        max: 500 + Math.random() * 700,
-        tam: fuente * (0.25 + Math.random() * 0.45),
-        ceniza: Math.random() < 0.15,
+        max: 500 + Math.random() * 900,
+        tam: tipo < 0.18 ? f * (0.12 + Math.random() * 0.2) : f * (0.05 + Math.random() * 0.06),
+        tipo: tipo < 0.18 ? "copo" : "chispa",
+        giro: Math.random() * 6,
       });
+    }
+    if (Math.random() < dt / 70) {
+      const i = Math.floor(Math.random() * LADOS_FUEGO);
+      const r = radiosFuego[i] + f * 0.6;
+      const px = fuego.x + angulosFuego[i].cos * r;
+      const py = fuego.y + angulosFuego[i].sin * r;
+      if (px > 0 && px < ancho && py > 0 && py < alto) {
+        fuego.humo.push({ x: px, y: py, vx: (Math.random() - 0.5) * 0.02, vy: -(0.025 + Math.random() * 0.035), vida: 0, max: 1600 + Math.random() * 1400, tam: f * (0.6 + Math.random() * 0.5) });
+      }
     }
   }
 
@@ -1772,32 +1794,54 @@ function arder(ahora) {
     p.vida += dt;
     if (p.vida >= p.max) continue;
     vivas.push(p);
+    p.vx += (Math.random() - 0.5) * 0.004;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     const resto = 1 - p.vida / p.max;
-    qctx.globalAlpha = resto;
-    if (p.ceniza) {
+    if (p.tipo === "copo") {
+      p.giro += dt * 0.006;
       qctx.globalCompositeOperation = "source-over";
-      qctx.fillStyle = "rgba(150, 140, 130, 0.8)";
-      qctx.fillRect(p.x, p.y, p.tam * 0.25, p.tam * 0.25);
+      qctx.globalAlpha = resto * 0.85;
+      qctx.fillStyle = "rgb(38, 28, 22)";
+      qctx.save();
+      qctx.translate(p.x, p.y);
+      qctx.rotate(p.giro);
+      qctx.fillRect(-p.tam / 2, -p.tam / 4, p.tam, p.tam / 2);
+      qctx.restore();
     } else {
-      const r = p.tam * resto;
       qctx.globalCompositeOperation = "lighter";
-      const llama = qctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-      llama.addColorStop(0, "rgba(255, 230, 140, 1)");
-      llama.addColorStop(0.5, "rgba(255, 120, 20, 0.7)");
-      llama.addColorStop(1, "rgba(255, 60, 0, 0)");
-      qctx.fillStyle = llama;
+      qctx.globalAlpha = resto;
+      qctx.fillStyle = resto > 0.5 ? "rgb(255, 225, 140)" : "rgb(255, 130, 40)";
       qctx.beginPath();
-      qctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      qctx.arc(p.x, p.y, p.tam, 0, Math.PI * 2);
       qctx.fill();
     }
   }
   fuego.particulas = vivas;
-  qctx.globalAlpha = 1;
-  qctx.globalCompositeOperation = "source-over";
 
-  if (fuego.consumido && fuego.particulas.length === 0) {
+  qctx.globalCompositeOperation = "source-over";
+  const humoVivo = [];
+  for (const h of fuego.humo) {
+    h.vida += dt;
+    if (h.vida >= h.max) continue;
+    humoVivo.push(h);
+    h.x += h.vx * dt;
+    h.y += h.vy * dt;
+    const avance = h.vida / h.max;
+    const radio = h.tam * (1 + avance * 2.5);
+    qctx.globalAlpha = Math.sin(avance * Math.PI) * 0.22;
+    const nube = qctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, radio);
+    nube.addColorStop(0, "rgba(70, 64, 58, 1)");
+    nube.addColorStop(1, "rgba(70, 64, 58, 0)");
+    qctx.fillStyle = nube;
+    qctx.beginPath();
+    qctx.arc(h.x, h.y, radio, 0, Math.PI * 2);
+    qctx.fill();
+  }
+  fuego.humo = humoVivo;
+  qctx.globalAlpha = 1;
+
+  if (fuego.consumido && fuego.particulas.length === 0 && fuego.humo.length === 0) {
     finQuemado();
     return;
   }
@@ -1805,6 +1849,8 @@ function arder(ahora) {
 }
 
 async function finQuemado() {
+  if (!fuego || fuego.cerrando) return;
+  fuego.cerrando = true;
   await carta.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, fill: "forwards" }).finished;
   if (estadoFinal) return;
   if (!quemaReverso) {

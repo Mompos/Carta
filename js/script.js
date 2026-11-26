@@ -80,7 +80,7 @@ function recordarPagina(i, esCorte) {
   const igual = previa && !esCorte && previa.palabras.length === textos.length && previa.palabras.every((m, k) => m.texto === textos[k]);
   if (!igual) {
     const perdidas = esCorte && previa ? previa.perdidas + previa.palabras.filter((m) => m.borrada).length : 0;
-    memoria.set(i, { perdidas, palabras: textos.map((texto) => ({ texto, viva: true, borrada: false, salvada: false })) });
+    memoria.set(i, { perdidas, palabras: textos.map((texto) => ({ texto, viva: true, borrada: false })) });
   }
   palabras.forEach((p, k) => (p.recuerdo = memoria.get(i).palabras[k]));
 }

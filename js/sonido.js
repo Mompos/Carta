@@ -195,9 +195,9 @@ const sonido = (() => {
       }
     },
 
-    brasa() {
-      tono(392, 523, 0.5, 0.07);
-      rafaga({ dur: 0.12, tipo: "highpass", f: 3000, nivel: 0.06 });
+    gota(fuerte = true) {
+      tono(azar(1100, 1500), azar(380, 520), 0.22, fuerte ? 0.09 : 0.04);
+      rafaga({ dur: 0.07, tipo: "highpass", f: 2600, nivel: fuerte ? 0.07 : 0.03, retraso: 0.01 });
     },
 
     apagarFuego() {

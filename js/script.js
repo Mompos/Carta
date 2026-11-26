@@ -1214,6 +1214,7 @@ function prepararAudio() {
 
 ["pointerup", "touchend", "click"].forEach((tipo) => document.addEventListener(tipo, prepararAudio, true));
 ["pointerdown", "pointerup", "touchend"].forEach((tipo) => document.addEventListener(tipo, () => sonido.iniciar(), true));
+["pointerdown", "pointermove"].forEach((tipo) => document.addEventListener(tipo, (e) => sonido.lado(e.clientX), { capture: true, passive: true }));
 
 function empezarCancion() {
   cancion.muted = false;

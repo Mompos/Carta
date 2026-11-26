@@ -436,6 +436,7 @@ function coronaYRebote(l) {
 }
 
 function salpicar(l) {
+  sonido.lado(l.cx);
   sonido.gota(true);
   vibrar();
   lluvia.insertBefore(l.lienzo, efectos);
@@ -625,6 +626,7 @@ function quemarPapel() {
   let anterior = inicio;
   vibrar();
   sonido.encender();
+  sonido.apagarMusica(DURACION_QUEMA_FIN / 1000 + 3);
 
   function cuadro(ahora) {
     const dt = Math.min(50, ahora - anterior);

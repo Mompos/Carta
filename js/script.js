@@ -14,8 +14,9 @@ const GASTADA_TOQUE = 20000;
 const GASTADA_TIEMPO = 90;
 const PISTA_REVERSO = "Desliza hacia arriba para volver · Raspa una cerilla y lánzala para quemarla";
 const PISTA_GASTADA = "La carta ya está gastada: desliza hacia arriba para voltearla";
-const ESPERA_ARRUGAR = 1200;
-const TIEMPO_ARRUGAR = 10000;
+const ESPERA_ARRUGAR = 700;
+const TIEMPO_ARRUGAR = 5000;
+const VELOCIDAD_FUEGO = 1.43;
 const INICIO_FOTOS = 220;
 const INICIO_PUENTE = 280;
 const DURACION_CANCION = 343.6;
@@ -29,33 +30,6 @@ const quemado = document.getElementById("quemado");
 const qctx = quemado.getContext("2d");
 const cancion = document.getElementById("cancion");
 
-const FINALES = {
-  intacta: {
-    titulo: "Casi intacta",
-    frase: "Apenas la tocaste. Tal vez todavía la quieres; tal vez ya no duele.",
-  },
-  calma: {
-    titulo: "Borrada con calma",
-    frase: "La borraste despacio, como quien apaga una luz. Lo que se olvida en paz deja menos ceniza.",
-  },
-  rabia: {
-    titulo: "Destrozada con rabia",
-    frase: "La rompiste con las mismas manos que la escribieron. El odio también es una forma de recordar.",
-  },
-  sinLeer: {
-    titulo: "Quemada sin leer",
-    frase: "La quemaste sin mirar atrás. Hay cartas que no se leen: se sobreviven.",
-  },
-  tachada: {
-    titulo: "Tachada en voz baja",
-    frase: "La tachaste sin gritar. Debajo de cada línea todavía se puede leer.",
-  },
-  nada: {
-    titulo: "No quedó nada",
-    frase: "Ni una palabra. Solo tú, con las manos negras.",
-  },
-};
-
 const registro = {
   rabiaSuma: 0,
   rabiaTiempo: 0,
@@ -67,29 +41,11 @@ const registro = {
   msReverso: 0,
   inicioReverso: 0,
   quemada: false,
-  leyendo: 0,
 };
 
 const MARCA_TACHADA = "\u2060";
-const memoria = new Map();
 let estadoFinal = null;
-
-function recordarPagina(i, esCorte) {
-  const previa = memoria.get(i);
-  const textos = palabras.map((p) => p.el.textContent);
-  const igual = previa && !esCorte && previa.palabras.length === textos.length && previa.palabras.every((m, k) => m.texto === textos[k]);
-  if (!igual) {
-    const perdidas = esCorte && previa ? previa.perdidas + previa.palabras.filter((m) => m.borrada).length : 0;
-    memoria.set(i, { perdidas, palabras: textos.map((texto) => ({ texto, viva: true, borrada: false })) });
-  }
-  palabras.forEach((p, k) => (p.recuerdo = memoria.get(i).palabras[k]));
-}
-
-function perder(p, borrada) {
-  if (!p.recuerdo) return;
-  p.recuerdo.viva = false;
-  if (borrada) p.recuerdo.borrada = true;
-}
+let fotosForzadas = false;
 
 function anotarRabia(rabia, ms) {
   registro.rabiaSuma += rabia * ms;
@@ -354,7 +310,6 @@ function tachar(p, rabia = 0.5) {
   p.tachada = true;
   p.el.classList.add("tachada");
   registro.tachadas++;
-  perder(p, false);
   vibrar();
   garabatear(p, rabia);
 }
@@ -437,7 +392,6 @@ function borrar(dedo, a, b) {
       p.borrada = true;
       p.el.classList.add("borrada");
       registro.borradas++;
-      perder(p, true);
       vibrar();
     }
   });
@@ -736,6 +690,7 @@ function mostrarReverso() {
 
 async function irAFotos() {
   if (volteada || enPuente || fotosQuemadas || animando) return;
+  fotosForzadas = true;
   await voltearCarta();
 }
 
@@ -780,7 +735,6 @@ function cargarPagina(i, contenido) {
   if (!enPuente) actual = i;
   texto.innerHTML = contenido || (enPuente ? paginaPuente : paginas[i]);
   envolverPalabras();
-  if (!enPuente) recordarPagina(i, !!contenido);
   trazos = [];
   numero.textContent = enPuente ? "" : `— ${i + 1} —`;
   ajustar();
@@ -799,7 +753,7 @@ carta.addEventListener("pointerdown", (e) => {
   }
   const p = punto(e);
   dedos.set(e.pointerId, { recorrido: [p], modo: null, trazo: null, inicio: p, ultimo: p, camino: 0, frotado: false, rabia: 0.3, giros: 0 });
-  if (dedos.size === 1 && !enPuente) iniciarPresion(e.pointerId, p);
+  if (dedos.size === 1 && !enPuente && !volteada) iniciarPresion(e.pointerId, p);
   else cancelarPresion();
 });
 
@@ -1060,10 +1014,8 @@ async function partirCarta(ini, fin, furia = 0.3) {
   palabras.forEach((p) => {
     if (!p.el.textContent.includes(MARCA_TACHADA)) return;
     p.el.textContent = p.el.textContent.replaceAll(MARCA_TACHADA, "");
-    p.recuerdo.texto = p.el.textContent;
     p.tachada = true;
     p.el.classList.add("tachada");
-    perder(p, false);
     garabatear(p, furia);
   });
   carta.style.opacity = "";
@@ -1386,17 +1338,13 @@ async function irAlPuente() {
 
 const reloj = setInterval(() => {
   if (!historiaIniciada) return;
-  if (estadoFinal) {
-    avanzarFinal();
-    return;
-  }
+  if (estadoFinal) return;
   const t = tiempoHistoria();
-  if (!volteada && !enPuente && !ardiendo && !document.hidden) registro.leyendo += 0.5;
   if (t >= duracionHistoria() - 0.3) {
     terminar();
     return;
   }
-  if (!enPuente && !ardiendo && !fotosQuemadas && t >= INICIO_FOTOS) irAFotos();
+  if (!enPuente && !ardiendo && !fotosQuemadas && !fotosForzadas && t >= INICIO_FOTOS) irAFotos();
   if (!enPuente && !ardiendo && t >= INICIO_PUENTE) irAlPuente();
   actualizarDesgaste();
 }, 500);
@@ -1629,7 +1577,7 @@ function arder(ahora) {
   fuego.ultimo = ahora;
   const diagonal = Math.hypot(Math.max(fuego.x, ancho - fuego.x), Math.max(fuego.y, alto - fuego.y));
   const empuje = fuego.r > diagonal ? 2.5 : 1;
-  fuego.r += dt * ancho * (0.00005 + 0.00008 * Math.min(1, (fuego.r / diagonal) * 1.5)) * empuje * (0.7 + 0.9 * fuego.furia);
+  fuego.r += dt * ancho * (0.00005 + 0.00008 * Math.min(1, (fuego.r / diagonal) * 1.5)) * empuje * (0.7 + 0.9 * fuego.furia) * VELOCIDAD_FUEGO;
   if (fuego.r * 0.64 > diagonal + fuente * 2 && !fuego.consumido) {
     fuego.consumido = true;
     sonido.apagarFuego();

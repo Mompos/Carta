@@ -1,67 +1,22 @@
-const COLA_FINAL = 24;
 const TIEMPO_REINICIO = 2000;
-const PALABRAS_SUELTAS = new Set(
-  "a al ante así aunque bajo con cuando cuánto de del desde e el en es la las le les lo los me mi ni no o para pero por porque que qué se si sin sobre su te tu tú un una unos unas y yo ya".split(" ")
-);
+const DURACION_FIN = 7000;
+const DURACION_QUEMA_FIN = 3200;
+const LIMPIEZA_NECESARIA = 0.85;
+const CELDA = 12;
 
 const despedida = document.getElementById("despedida");
 const lluvia = document.getElementById("lluvia");
-const FRAGMENTOS = [...document.querySelectorAll("#paginas .lagrimas p")].map((p) => p.textContent.trim()).filter(Boolean);
 const papel = document.getElementById("papel");
+const ceniza = document.getElementById("ceniza");
+const cenizaCtx = ceniza.getContext("2d");
+const FRAGMENTOS = [...document.querySelectorAll("#paginas .lagrimas p")].map((p) => p.textContent.trim()).filter(Boolean);
 
-let papelListo = 0;
 let lagrimaActual = null;
 let frote = null;
 let reinicio = null;
 
-function tiempoRestante() {
-  return Math.max(0, duracionHistoria() - tiempoHistoria());
-}
-
-function palabrasVistas() {
-  return [...memoria.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .flatMap(([pagina, m]) => m.palabras.map((p) => Object.assign(p, { pagina })));
-}
-
-function resumenCarta() {
-  const vistas = palabrasVistas();
-  const vivas = vistas.filter((p) => p.viva);
-  const perdidas = [...memoria.values()].reduce((n, m) => n + m.perdidas, 0);
-  const total = vistas.length + perdidas;
-  return { vistas, vivas, dano: total ? 1 - vivas.length / total : 0 };
-}
-
-function leyoLaCarta() {
-  return (memoria.size === paginas.length && registro.leyendo >= 15) || registro.leyendo >= 60;
-}
-
-function elegirFinal() {
-  const { vivas, dano } = resumenCarta();
-  const roturas = registro.cortes + registro.arrugadas;
-  if (!vivas.length && memoria.size === paginas.length) return "nada";
-  if (registro.quemada && !leyoLaCarta()) return "sinLeer";
-  if (dano < 0.08 && !roturas) return "intacta";
-  if (rabiaMedia() >= 0.45 || roturas >= 2) return "rabia";
-  if (registro.borradas && registro.borradas >= registro.tachadas) return "calma";
-  if (registro.tachadas) return "tachada";
-  return roturas ? "rabia" : "intacta";
-}
-
-function describirHuella() {
-  const { vivas, dano } = resumenCarta();
-  const { tachadas, borradas, cortes, arrugadas } = registro;
-  const frases = [];
-  if (!vivas.length) frases.push("No dejaste ninguna palabra.");
-  else if (!tachadas && !borradas) frases.push("No tachaste ni borraste nada.");
-  else if (dano < 0.08) frases.push("Solo heriste unas pocas palabras.");
-  else if (tachadas > borradas * 1.2) frases.push("Tachaste más de lo que borraste.");
-  else if (borradas > tachadas * 1.2) frases.push("Borraste más de lo que tachaste.");
-  else frases.push("Tachaste y borraste por igual.");
-  if (cortes && arrugadas) frases.push("La partiste y la arrugaste.");
-  else if (cortes) frases.push("La partiste en dos.");
-  else if (arrugadas) frases.push("La arrugaste en el puño.");
-  return frases.join(" ");
+function azar(a, b) {
+  return a + Math.random() * (b - a);
 }
 
 async function iniciarDespedida() {
@@ -79,34 +34,9 @@ async function iniciarDespedida() {
   }
   carta.style.visibility = "hidden";
   despedida.hidden = false;
-  llorar();
-}
-
-function avanzarFinal() {
-  if (estadoFinal === "papel" && papelListo && performance.now() - papelListo > 7000) guardarEnSobre();
-}
-
-function llorar() {
+  prepararCeniza();
   estadoFinal = "lagrimas";
-  pista.textContent = "";
-  siguienteLagrima(0);
-}
-
-function siguienteLagrima(n) {
-  if (estadoFinal !== "lagrimas") return;
-  if (n >= FRAGMENTOS.length) {
-    setTimeout(mostrarPapel, 900);
-    return;
-  }
-  soltarLagrima(FRAGMENTOS[n], n);
-}
-
-const SVG = "http://www.w3.org/2000/svg";
-const activas = [];
-let numeroGota = 0;
-
-function azar(a, b) {
-  return a + Math.random() * (b - a);
+  soltarLagrima(0);
 }
 
 function zonaLluvia() {
@@ -119,125 +49,21 @@ function escalaGotas() {
   return Math.min(1.35, Math.max(0.8, Math.min(window.innerWidth, window.innerHeight * 0.62) / 375));
 }
 
-function buscarLugar(radio, cajaTexto) {
-  const zona = zonaLluvia();
-  const ahora = performance.now();
-  for (let i = activas.length - 1; i >= 0; i--) if (activas[i].hasta < ahora) activas.splice(i, 1);
-  const medioAncho = Math.max(radio, cajaTexto ? cajaTexto.w / 2 : 0);
-  const medioAlto = Math.max(radio, cajaTexto ? cajaTexto.h / 2 : 0);
-  let mejor = null;
-  let mejorPuntaje = -Infinity;
-  for (let intento = 0; intento < 40; intento++) {
-    const x = azar(zona.izq + medioAncho, Math.max(zona.izq + medioAncho, zona.der - medioAncho));
-    const y = azar(zona.arriba + medioAlto, Math.max(zona.arriba + medioAlto, zona.abajo - medioAlto));
-    let puntaje = Infinity;
-    activas.forEach((a) => {
-      const holgura = Math.hypot(x - a.x, y - a.y) - (radio + a.radio);
-      let choqueTexto = Infinity;
-      if (cajaTexto && a.caja) {
-        const dx = Math.abs(x - a.x) - (cajaTexto.w + a.caja.w) / 2;
-        const dy = Math.abs(y - a.y) - (cajaTexto.h + a.caja.h) / 2;
-        choqueTexto = Math.max(dx, dy);
-      }
-      puntaje = Math.min(puntaje, holgura, choqueTexto * 1.5);
-    });
-    if (puntaje > mejorPuntaje) {
-      mejorPuntaje = puntaje;
-      mejor = { x, y };
-    }
-    if (puntaje > 30) break;
-  }
-  return mejor;
+// ---------- Lágrimas ----------
+
+function partirEnLineas(c, texto, maximo) {
+  const lineas = [];
+  let linea = "";
+  texto.split(" ").forEach((palabra) => {
+    const prueba = linea ? linea + " " + palabra : palabra;
+    if (linea && c.measureText(prueba).width > maximo) {
+      lineas.push(linea);
+      linea = palabra;
+    } else linea = prueba;
+  });
+  if (linea) lineas.push(linea);
+  return lineas;
 }
-
-function soltarLagrima(texto, n) {
-  const radio = azar(40, 62) * escalaGotas();
-  const frase = document.createElement("p");
-  frase.className = "frase-lagrima";
-  frase.textContent = texto;
-  lluvia.appendChild(frase);
-  const caja = { w: frase.offsetWidth + 16, h: frase.offsetHeight + 10 };
-  activas.length = 0;
-  const { x: cx, y: cy } = buscarLugar(radio * 2.2, caja);
-  frase.style.transform = `translate(${cx - frase.offsetWidth / 2}px, ${cy - frase.offsetHeight / 2}px)`;
-
-  const gota = document.createElement("i");
-  gota.className = "lagrima";
-  const lado = Math.max(14, radio * 0.55);
-  gota.style.width = gota.style.height = lado + "px";
-  lluvia.appendChild(gota);
-  const centroX = window.innerWidth / 2;
-  const centroY = window.innerHeight / 2;
-  const desde = `translate(${cx - lado / 2 + (cx - centroX) * 0.45}px, ${cy - lado / 2 + (cy - centroY) * 0.45}px) scale(4)`;
-  const hasta = `translate(${cx - lado / 2}px, ${cy - lado / 2}px) scale(0.6)`;
-  gota
-    .animate(
-      [
-        { transform: desde, filter: "blur(9px)", opacity: 0 },
-        { opacity: 0.55, offset: 0.25 },
-        { transform: hasta, filter: "blur(0px)", opacity: 0.95 },
-      ],
-      { duration: azar(650, 850), easing: "cubic-bezier(0.55, 0, 0.9, 0.45)", fill: "forwards" }
-    )
-    .finished.then(() => {
-      gota.remove();
-      const svg = salpicar(cx, cy, radio, frase);
-      lagrimaActual = { n, cx, cy, radio, svg, frase, limpio: 0 };
-      setTimeout(() => {
-        if (lagrimaActual && lagrimaActual.n === n && !lagrimaActual.limpio) pista.textContent = "Frota la lágrima para limpiarla";
-      }, 1600);
-    })
-    .catch(() => gota.remove());
-}
-
-function limpiar(e) {
-  if (!frote || frote.id !== e.pointerId || !lagrimaActual || lagrimaActual.saliendo) return;
-  const paso = Math.hypot(e.clientX - frote.x, e.clientY - frote.y);
-  frote.x = e.clientX;
-  frote.y = e.clientY;
-  const l = lagrimaActual;
-  const alcance = Math.max(l.radio * 1.9, 80);
-  if (Math.hypot(e.clientX - l.cx, e.clientY - l.cy) > alcance) return;
-  if (!l.tocada) {
-    l.tocada = true;
-    quitarAnimaciones(l.frase);
-  }
-  l.limpio = Math.min(1, l.limpio + paso / (l.radio * 7 + 260));
-  sonido.goma(0.15 + 0.2 * Math.min(1, paso / 20));
-  l.svg.style.opacity = (1 - l.limpio * 0.92).toFixed(2);
-  l.svg.style.transform = `scale(${(1 + l.limpio * 0.12).toFixed(3)})`;
-  l.frase.style.opacity = (1 - l.limpio).toFixed(2);
-  l.frase.style.filter = `blur(${(l.limpio * 4).toFixed(1)}px)`;
-  if (l.limpio >= 1) terminarLimpieza();
-}
-
-function terminarLimpieza() {
-  const l = lagrimaActual;
-  l.saliendo = true;
-  lagrimaActual = null;
-  pista.textContent = "";
-  vibrar();
-  quitarAnimaciones(l.frase);
-  [l.svg, l.frase].forEach((el) =>
-    el.animate([{ opacity: el.style.opacity || 1 }, { opacity: 0 }], { duration: 450, fill: "forwards" }).finished.then(() => el.remove()).catch(() => el.remove())
-  );
-  setTimeout(() => siguienteLagrima(l.n + 1), 800);
-}
-
-despedida.addEventListener("pointerdown", (e) => {
-  if (estadoFinal !== "lagrimas") return;
-  e.preventDefault();
-  frote = { id: e.pointerId, x: e.clientX, y: e.clientY };
-  try {
-    despedida.setPointerCapture(e.pointerId);
-  } catch (error) {}
-});
-despedida.addEventListener("pointermove", limpiar);
-["pointerup", "pointercancel"].forEach((tipo) =>
-  despedida.addEventListener(tipo, (e) => {
-    if (frote && frote.id === e.pointerId) frote = null;
-  })
-);
 
 function contornoIrregular(radio, puntas) {
   const n = 18;
@@ -251,133 +77,296 @@ function contornoIrregular(radio, puntas) {
     const i = Math.round((a / (Math.PI * 2)) * n) % n;
     pts[i] = [Math.cos(a) * (radio + largo * 0.35), Math.sin(a) * (radio + largo * 0.35)];
   });
+  const camino = new Path2D();
   const medio = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
-  let d = `M${medio(pts[n - 1], pts[0]).map((v) => v.toFixed(1)).join(" ")}`;
+  const inicio = medio(pts[n - 1], pts[0]);
+  camino.moveTo(inicio[0], inicio[1]);
   for (let i = 0; i < n; i++) {
     const m = medio(pts[i], pts[(i + 1) % n]);
-    d += ` Q${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)} ${m[0].toFixed(1)} ${m[1].toFixed(1)}`;
+    camino.quadraticCurveTo(pts[i][0], pts[i][1], m[0], m[1]);
   }
-  return d + " Z";
+  camino.closePath();
+  return camino;
 }
 
-function nodo(tipo, atributos, padre) {
-  const el = document.createElementNS(SVG, tipo);
-  Object.entries(atributos).forEach(([k, v]) => el.setAttribute(k, v));
-  if (padre) padre.appendChild(el);
-  return el;
-}
-
-function salpicar(cx, cy, radio, frase) {
-  sonido.gota(true);
-  vibrar();
-  const id = "g" + numeroGota++;
-  const alcance = radio * 2.6;
-  const lado = alcance * 2;
-  const svg = nodo("svg", { class: "salpicadura", width: lado, height: lado, viewBox: `${-alcance} ${-alcance} ${lado} ${lado}` });
-  svg.style.left = cx - alcance + "px";
-  svg.style.top = cy - alcance + "px";
-
-  const defs = nodo("defs", {}, svg);
-  const degradado = nodo("radialGradient", { id, gradientUnits: "userSpaceOnUse", cx: 0, cy: 0, r: (radio * 1.08).toFixed(1), fx: (-radio * 0.2).toFixed(1), fy: (-radio * 0.25).toFixed(1) }, defs);
-  [
-    ["0", "rgba(80, 110, 150, 0.12)"],
-    ["0.78", "rgba(95, 128, 170, 0.2)"],
-    ["0.93", "rgba(165, 195, 232, 0.4)"],
-    ["1", "rgba(210, 228, 250, 0.5)"],
-  ].forEach(([offset, color]) => nodo("stop", { offset, "stop-color": color }, degradado));
-
+function dibujarMancha(c, radio) {
   const puntas = Array.from({ length: Math.round(azar(6, 11)) }, () => ({ a: Math.random() * Math.PI * 2, largo: radio * azar(0.2, 0.85) }));
+  const agua = "rgba(160, 190, 230, 0.34)";
+  const borde = "rgba(210, 228, 250, 0.55)";
 
-  const corona = nodo("g", { class: "corona" }, svg);
   puntas.forEach(({ a, largo }) => {
     const ancho_ = radio * azar(0.05, 0.12);
     const x1 = Math.cos(a) * radio * 0.98;
     const y1 = Math.sin(a) * radio * 0.98;
-    const x2 = Math.cos(a) * (radio + largo);
-    const y2 = Math.sin(a) * (radio + largo);
     const px = -Math.sin(a) * ancho_;
     const py = Math.cos(a) * ancho_;
-    nodo("path", { d: `M${(x1 + px).toFixed(1)} ${(y1 + py).toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)} L${(x1 - px).toFixed(1)} ${(y1 - py).toFixed(1)} Z`, fill: "rgba(160, 190, 230, 0.34)" }, corona);
+    c.fillStyle = agua;
+    c.beginPath();
+    c.moveTo(x1 + px, y1 + py);
+    c.lineTo(Math.cos(a) * (radio + largo), Math.sin(a) * (radio + largo));
+    c.lineTo(x1 - px, y1 - py);
+    c.fill();
     if (Math.random() < 0.75) {
       const rr = radio * azar(0.05, 0.11);
-      nodo("circle", { cx: (Math.cos(a) * (radio + largo + rr * 1.4)).toFixed(1), cy: (Math.sin(a) * (radio + largo + rr * 1.4)).toFixed(1), r: rr.toFixed(1), fill: "rgba(150, 182, 225, 0.32)", stroke: "rgba(205,225,248,0.5)", "stroke-width": "0.8" }, corona);
+      const d = radio + largo + rr * 1.4;
+      c.beginPath();
+      c.arc(Math.cos(a) * d, Math.sin(a) * d, rr, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = borde;
+      c.lineWidth = 0.8;
+      c.stroke();
     }
   });
 
-  const mancha = nodo("g", { class: "mancha-agua" }, svg);
-  nodo("path", { d: contornoIrregular(radio, puntas), fill: `url(#${id})`, stroke: "rgba(210, 228, 250, 0.55)", "stroke-width": "1.2" }, mancha);
-  nodo("ellipse", { cx: (-radio * 0.32).toFixed(1), cy: (-radio * 0.36).toFixed(1), rx: (radio * 0.28).toFixed(1), ry: (radio * 0.16).toFixed(1), fill: "rgba(255,255,255,0.22)", transform: "rotate(-28)" }, mancha);
+  const degradado = c.createRadialGradient(-radio * 0.2, -radio * 0.25, 0, 0, 0, radio * 1.08);
+  degradado.addColorStop(0, "rgba(80, 110, 150, 0.12)");
+  degradado.addColorStop(0.78, "rgba(95, 128, 170, 0.2)");
+  degradado.addColorStop(0.93, "rgba(165, 195, 232, 0.4)");
+  degradado.addColorStop(1, "rgba(210, 228, 250, 0.5)");
+  const mancha = contornoIrregular(radio, puntas);
+  c.fillStyle = degradado;
+  c.fill(mancha);
+  c.strokeStyle = borde;
+  c.lineWidth = 1.2;
+  c.stroke(mancha);
 
-  const satelites = nodo("g", {}, svg);
-  const gotitas = Array.from({ length: Math.round(azar(4, 9)) }, () => {
+  c.save();
+  c.rotate(-0.5);
+  c.fillStyle = "rgba(255, 255, 255, 0.2)";
+  c.beginPath();
+  c.ellipse(-radio * 0.4, -radio * 0.2, radio * 0.28, radio * 0.16, 0, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+
+  for (let i = 0, n = Math.round(azar(4, 9)); i < n; i++) {
     const a = Math.random() * Math.PI * 2;
-    const d = radio * azar(1.5, 2.4);
-    const c = nodo("circle", { cx: 0, cy: 0, r: (radio * azar(0.04, 0.1)).toFixed(1), fill: "rgba(170, 200, 238, 0.5)", stroke: "rgba(220, 235, 252, 0.6)", "stroke-width": "0.7" }, satelites);
-    return { c, x: Math.cos(a) * d, y: Math.sin(a) * d };
+    const d = radio * azar(1.5, 2.3);
+    c.beginPath();
+    c.arc(Math.cos(a) * d, Math.sin(a) * d, radio * azar(0.04, 0.1), 0, Math.PI * 2);
+    c.fillStyle = "rgba(170, 200, 238, 0.5)";
+    c.fill();
+  }
+}
+
+function crearLagrima(texto, radio) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const tamano = Math.min(30, Math.max(22, window.innerWidth * 0.062));
+  const medidor = document.createElement("canvas").getContext("2d");
+  medidor.font = `${tamano}px Caveat, "Segoe Script", "Bradley Hand", cursive`;
+  const lineas = partirEnLineas(medidor, texto, Math.min(window.innerWidth * 0.72, 400));
+  const anchoTexto = Math.max(...lineas.map((l) => medidor.measureText(l).width));
+  const altoLinea = tamano * 1.15;
+  const altoTexto = lineas.length * altoLinea;
+  const alcance = radio * 2.5;
+  const ancho_ = Math.ceil(Math.max(alcance * 2, anchoTexto + 30));
+  const alto_ = Math.ceil(Math.max(alcance * 2, altoTexto + 30));
+
+  const lienzo_ = document.createElement("canvas");
+  lienzo_.className = "lienzo-lagrima";
+  lienzo_.width = ancho_ * dpr;
+  lienzo_.height = alto_ * dpr;
+  lienzo_.style.width = ancho_ + "px";
+  lienzo_.style.height = alto_ + "px";
+  const c = lienzo_.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, ancho_ / 2 * dpr, alto_ / 2 * dpr);
+  dibujarMancha(c, radio);
+
+  c.font = medidor.font;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillStyle = "#efe6d3";
+  c.shadowColor = "rgba(20, 30, 45, 0.95)";
+  c.shadowBlur = 10;
+  lineas.forEach((l, i) => {
+    const y = (i - (lineas.length - 1) / 2) * altoLinea;
+    c.fillText(l, 0, y);
+    c.fillText(l, 0, y);
   });
 
-  const onda = nodo("circle", { cx: 0, cy: 0, r: radio.toFixed(1), fill: "none", stroke: "rgba(210, 228, 250, 0.7)", "stroke-width": "1.4" }, svg);
-  lluvia.insertBefore(svg, lluvia.firstChild);
+  const columnas = Math.ceil(ancho_ / CELDA);
+  const filas = Math.ceil(alto_ / CELDA);
+  const celdas = new Uint8Array(columnas * filas);
+  let tinta = 0;
+  for (let f = 0; f < filas; f++) {
+    for (let k = 0; k < columnas; k++) {
+      const x = (k + 0.5) * CELDA - ancho_ / 2;
+      const y = (f + 0.5) * CELDA - alto_ / 2;
+      const enMancha = Math.hypot(x, y) < radio * 1.05;
+      const enTexto = Math.abs(x) < anchoTexto / 2 + 4 && Math.abs(y) < altoTexto / 2 + 2;
+      if (enMancha || enTexto) {
+        celdas[f * columnas + k] = 1;
+        tinta++;
+      }
+    }
+  }
+  return { lienzo: lienzo_, c, ancho: ancho_, alto: alto_, celdas, columnas, filas, tinta, borradas: 0, caja: { w: anchoTexto + 16, h: altoTexto + 10 } };
+}
 
-  [mancha, corona, onda].forEach((g) => {
-    g.style.transformBox = "view-box";
-    g.style.transformOrigin = "0px 0px";
-  });
-  mancha.animate([{ transform: "scale(0.25)" }, { transform: "scale(1.08)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 380, easing: "ease-out", fill: "both" });
-  corona.animate(
+function soltarLagrima(n) {
+  if (estadoFinal !== "lagrimas") return;
+  if (n >= FRAGMENTOS.length) {
+    setTimeout(mostrarPapel, 900);
+    return;
+  }
+  const radio = azar(40, 62) * escalaGotas();
+  const l = crearLagrima(FRAGMENTOS[n], radio);
+  const zona = zonaLluvia();
+  const medioAncho = Math.max(radio * 2.2, l.caja.w / 2);
+  const medioAlto = Math.max(radio * 2.2, l.caja.h / 2);
+  const cx = azar(zona.izq + medioAncho, Math.max(zona.izq + medioAncho, zona.der - medioAncho));
+  const cy = azar(zona.arriba + medioAlto, Math.max(zona.arriba + medioAlto, zona.abajo - medioAlto));
+  Object.assign(l, { n, cx, cy, radio, izq: cx - l.ancho / 2, arriba: cy - l.alto / 2 });
+  l.lienzo.style.left = l.izq + "px";
+  l.lienzo.style.top = l.arriba + "px";
+
+  const gota = document.createElement("i");
+  gota.className = "lagrima";
+  const lado = Math.max(14, radio * 0.55);
+  gota.style.width = gota.style.height = lado + "px";
+  lluvia.appendChild(gota);
+  const desde = `translate(${cx - lado / 2 + (cx - window.innerWidth / 2) * 0.45}px, ${cy - lado / 2 + (cy - window.innerHeight / 2) * 0.45}px) scale(4)`;
+  const hasta = `translate(${cx - lado / 2}px, ${cy - lado / 2}px) scale(0.6)`;
+  gota
+    .animate(
+      [
+        { transform: desde, filter: "blur(9px)", opacity: 0 },
+        { opacity: 0.55, offset: 0.25 },
+        { transform: hasta, filter: "blur(0px)", opacity: 0.95 },
+      ],
+      { duration: azar(650, 850), easing: "cubic-bezier(0.55, 0, 0.9, 0.45)", fill: "forwards" }
+    )
+    .finished.then(() => {
+      gota.remove();
+      if (estadoFinal !== "lagrimas") return;
+      salpicar(l);
+    })
+    .catch(() => gota.remove());
+}
+
+function salpicar(l) {
+  sonido.gota(true);
+  vibrar();
+  lluvia.appendChild(l.lienzo);
+  l.lienzo.animate(
     [
       { transform: "scale(0.3)", opacity: 0 },
-      { transform: "scale(1.12)", opacity: 1, offset: 0.45 },
-      { transform: "scale(1)", opacity: 0.55 },
+      { transform: "scale(1.06)", opacity: 1, offset: 0.6 },
+      { transform: "scale(1)", opacity: 1 },
     ],
-    { duration: 520, easing: "ease-out", fill: "both" }
+    { duration: 420, easing: "ease-out" }
   );
-  gotitas.forEach(({ c, x, y }) =>
-    c.animate([{ transform: "translate(0px, 0px)", opacity: 0 }, { transform: `translate(${x}px, ${y}px)`, opacity: 1 }], { duration: azar(260, 420), easing: "cubic-bezier(0.2, 0.7, 0.3, 1)", fill: "both" })
-  );
-  onda.animate([{ transform: "scale(0.6)", opacity: 0.9 }, { transform: "scale(2.5)", opacity: 0 }], { duration: 1100, easing: "ease-out", fill: "both" });
+  const onda = document.createElement("i");
+  onda.className = "onda-lagrima";
+  const lado = l.radio * 2;
+  Object.assign(onda.style, { width: lado + "px", height: lado + "px", left: l.cx - l.radio + "px", top: l.cy - l.radio + "px" });
+  lluvia.appendChild(onda);
+  onda.animate([{ transform: "scale(0.6)", opacity: 0.9 }, { transform: "scale(2.5)", opacity: 0 }], { duration: 1100, easing: "ease-out", fill: "forwards" }).finished.then(() => onda.remove());
 
-  frase.animate([{ opacity: 0, filter: "blur(4px)" }, { opacity: 1, filter: "blur(0px)" }], { duration: 1200, delay: 250, fill: "both" });
-  return svg;
+  lagrimaActual = l;
+  setTimeout(() => {
+    if (lagrimaActual === l && !l.borradas) pista.textContent = "Frota la lágrima para borrarla";
+  }, 1600);
 }
 
-function limpiarPalabra(t) {
-  return t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+function borrarLagrima(x, y) {
+  const l = lagrimaActual;
+  const pincel = Math.max(22, l.radio * 0.5);
+  const lx = x - l.izq;
+  const ly = y - l.arriba;
+  if (lx < -pincel || ly < -pincel || lx > l.ancho + pincel || ly > l.alto + pincel) return false;
+  const c = l.c;
+  c.save();
+  c.globalCompositeOperation = "destination-out";
+  const goma = c.createRadialGradient(lx - l.ancho / 2, ly - l.alto / 2, 0, lx - l.ancho / 2, ly - l.alto / 2, pincel);
+  goma.addColorStop(0, "rgba(0,0,0,0.6)");
+  goma.addColorStop(0.6, "rgba(0,0,0,0.35)");
+  goma.addColorStop(1, "rgba(0,0,0,0)");
+  c.fillStyle = goma;
+  c.beginPath();
+  c.arc(lx - l.ancho / 2, ly - l.alto / 2, pincel, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+
+  const alcance = pincel * 0.75;
+  const k0 = Math.max(0, Math.floor((lx - alcance) / CELDA));
+  const k1 = Math.min(l.columnas - 1, Math.floor((lx + alcance) / CELDA));
+  const f0 = Math.max(0, Math.floor((ly - alcance) / CELDA));
+  const f1 = Math.min(l.filas - 1, Math.floor((ly + alcance) / CELDA));
+  for (let f = f0; f <= f1; f++) {
+    for (let k = k0; k <= k1; k++) {
+      const i = f * l.columnas + k;
+      if (!l.celdas[i] || l.celdas[i] >= 3) continue;
+      if (Math.hypot((k + 0.5) * CELDA - lx, (f + 0.5) * CELDA - ly) > alcance) continue;
+      l.celdas[i]++;
+      if (l.celdas[i] === 3) l.borradas++;
+    }
+  }
+  return true;
 }
 
-function esSuelta(t) {
-  return PALABRAS_SUELTAS.has(limpiarPalabra(t).toLowerCase());
+function frotarLagrima(e) {
+  if (!frote || frote.id !== e.pointerId || !lagrimaActual || lagrimaActual.saliendo) return;
+  const l = lagrimaActual;
+  const pincel = Math.max(22, l.radio * 0.5);
+  const dx = e.clientX - frote.x;
+  const dy = e.clientY - frote.y;
+  const distancia = Math.hypot(dx, dy);
+  const pasos = Math.max(1, Math.ceil(distancia / (pincel * 0.35)));
+  let toco = false;
+  for (let i = 1; i <= pasos; i++) toco = borrarLagrima(frote.x + (dx * i) / pasos, frote.y + (dy * i) / pasos) || toco;
+  frote.x = e.clientX;
+  frote.y = e.clientY;
+  if (!toco) return;
+  sonido.goma(Math.min(1, 0.2 + distancia / 30));
+  if (l.borradas / l.tinta >= LIMPIEZA_NECESARIA) terminarLimpieza();
 }
 
-function muestra(lista, n) {
-  const elegidos = lista.map((v, i) => i);
-  while (elegidos.length > n) elegidos.splice(Math.floor(Math.random() * elegidos.length), 1);
-  return elegidos.map((i) => lista[i]);
+function terminarLimpieza() {
+  const l = lagrimaActual;
+  l.saliendo = true;
+  lagrimaActual = null;
+  pista.textContent = "";
+  vibrar();
+  l.lienzo.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 450, fill: "forwards" }).finished.then(() => l.lienzo.remove());
+  setTimeout(() => soltarLagrima(l.n + 1), 800);
 }
 
-function componerCarta() {
-  const vistas = palabrasVistas();
-  const frases = [];
-  let tramo = [];
-  const cerrar = () => {
-    while (tramo.length && esSuelta(tramo[tramo.length - 1])) tramo.pop();
-    if (tramo.length >= 2) frases.push(tramo.map((t) => limpiarPalabra(t) || t));
-    tramo = [];
-  };
-  vistas.forEach((p, i) => {
-    const anterior = vistas[i - 1];
-    if (!p.viva || (anterior && anterior.pagina !== p.pagina)) cerrar();
-    if (!p.viva) return;
-    tramo.push(p.texto);
-    if (tramo.length >= 6 || /[.,:;]$/.test(p.texto)) cerrar();
-  });
-  cerrar();
-  if (frases.length) return muestra(frases, 4);
+despedida.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (estadoFinal === "lagrimas") {
+    frote = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    try {
+      despedida.setPointerCapture(e.pointerId);
+    } catch (error) {}
+    frotarLagrima(e);
+  } else if (estadoFinal === "ceniza" && !reinicio) {
+    reinicio = { id: e.pointerId, x: e.clientX, y: e.clientY, reloj: setTimeout(() => location.reload(), TIEMPO_REINICIO) };
+    pista.textContent = "…";
+  }
+});
+despedida.addEventListener("pointermove", (e) => {
+  frotarLagrima(e);
+  if (reinicio && reinicio.id === e.pointerId && Math.hypot(e.clientX - reinicio.x, e.clientY - reinicio.y) > 30) soltarReinicio();
+});
+["pointerup", "pointercancel"].forEach((tipo) =>
+  despedida.addEventListener(tipo, (e) => {
+    if (frote && frote.id === e.pointerId) frote = null;
+    soltarReinicio();
+  })
+);
+despedida.addEventListener("touchstart", (e) => {
+  if (estadoFinal) e.preventDefault();
+}, { passive: false });
+despedida.addEventListener("contextmenu", (e) => e.preventDefault());
 
-  const solas = vistas.filter((p) => p.viva && !esSuelta(p.texto));
-  const usar = solas.length ? solas : vistas.filter((p) => p.viva);
-  return muestra(usar, 5).map((p) => [limpiarPalabra(p.texto) || p.texto]);
+function soltarReinicio() {
+  if (!reinicio) return;
+  clearTimeout(reinicio.reloj);
+  reinicio = null;
+  if (estadoFinal === "ceniza") pista.textContent = "Mantén el dedo para volver a empezar";
 }
+
+// ---------- La carta que dice Fin ----------
 
 function bordeRoto(desgarro) {
   const n = 11;
@@ -390,6 +379,23 @@ function bordeRoto(desgarro) {
   return aCss(puntos);
 }
 
+function escribirEn(el, frase) {
+  el.textContent = "";
+  el.setAttribute("aria-label", frase);
+  return [...frase].map((c) => {
+    const l = document.createElement("span");
+    l.className = "letra";
+    l.textContent = c;
+    el.appendChild(l);
+    return l;
+  });
+}
+
+function ajustarPapel() {
+  if (papel.hidden) return;
+  papel.style.setProperty("--fuente-papel", Math.min(27, Math.max(20, window.innerWidth * 0.066)) + "px");
+}
+
 async function mostrarPapel() {
   estadoFinal = "papel";
   pista.textContent = "";
@@ -397,116 +403,160 @@ async function mostrarPapel() {
 
   const quemado_ = registro.quemada;
   papel.classList.toggle("quemado", quemado_);
-  papel.classList.add("solo-fin");
   papel.querySelector(".papel-borde").style.clipPath = bordeRoto(quemado_ ? 3.5 : 0.6);
   papel.querySelector(".papel-hoja").style.clipPath = bordeRoto(quemado_ ? 4 : 0.6);
-  papel.querySelector(".ultima-carta").textContent = "";
-  papel.querySelector(".final-titulo").textContent = "";
-  papel.querySelector(".final-huella").textContent = "";
   const letras = escribirEn(papel.querySelector(".final-frase"), "Fin");
 
   papel.hidden = false;
   ajustarPapel();
   sonido.pagina();
+  const aparece = performance.now();
   papel.animate([{ opacity: 0, transform: "translateY(26px) rotate(-2deg)" }, { opacity: 1, transform: "none" }], { duration: 1600, easing: "ease-out", fill: "both" });
   await esperar(1400);
   letras.forEach((l, i) => l.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 700, delay: i * 380, fill: "both" }));
-  await esperar(letras.length * 380 + 900);
-  papelListo = performance.now();
+  await esperar(Math.max(0, DURACION_FIN - (performance.now() - aparece)));
+  quemarPapel();
 }
 
-function mostrarSuave(el) {
-  el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 900, fill: "both" });
+// ---------- El papel se quema y deja ceniza ----------
+
+function prepararCeniza() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  ceniza.width = Math.round(window.innerWidth * dpr);
+  ceniza.height = Math.round(window.innerHeight * dpr);
+  cenizaCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-function escribirEn(el, frase) {
-  el.textContent = "";
-  el.setAttribute("aria-label", frase);
-  const letras = [];
-  frase.split(" ").forEach((palabra, i) => {
-    if (i) el.append(" ");
-    const bloque = document.createElement("span");
-    bloque.className = "bloque";
-    [...palabra].forEach((c) => {
-      const l = document.createElement("span");
-      l.className = "letra";
-      l.textContent = c;
-      bloque.appendChild(l);
-      letras.push(l);
-    });
-    el.appendChild(bloque);
-  });
-  return letras;
-}
-
-function ajustarPapel() {
-  if (papel.hidden) return;
-  let f = Math.min(27, Math.max(20, window.innerWidth * 0.066));
-  papel.style.setProperty("--fuente-papel", f + "px");
-  while (papel.offsetHeight > escenario.offsetHeight - 10 && f > 13) {
-    f -= 0.5;
-    papel.style.setProperty("--fuente-papel", f + "px");
-  }
-}
-
-async function guardarEnSobre() {
-  estadoFinal = "sobre";
-  clearInterval(reloj);
-  quitarAnimaciones(escenaSobre);
-  abrecartas.style.display = "none";
-  sobre.classList.remove("sin-sello", "cortando");
-  sobre.classList.add("abierto", "fuera");
-  escenaSobre.style.display = "";
-  papel.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(6%) scale(0.45)" }], { duration: 1500, easing: "ease-in", fill: "forwards" });
-  await escenaSobre.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1700, delay: 500, fill: "both" }).finished;
-  despedida.hidden = true;
-  sonido.pagina();
-  sobre.classList.remove("fuera");
-  await esperar(1200);
-  sonido.abrirSobre();
-  sobre.classList.remove("abierto");
-  await esperar(900);
-  ponerSelloRoto();
-  sonido.romperSello();
+function quemarPapel() {
+  estadoFinal = "quemandoFin";
+  const caja = papel.getBoundingClientRect();
+  const ox = azar(caja.width * 0.2, caja.width * 0.8);
+  const oy = caja.height * azar(0.85, 1);
+  const maximo = Math.hypot(Math.max(ox, caja.width - ox), Math.max(oy, caja.height - oy)) + 30;
+  const chispas = [];
+  const fase = Math.random() * 6.3;
+  const inicio = performance.now();
+  let anterior = inicio;
   vibrar();
-  estadoFinal = "fin";
-  pista.textContent = "Mantén el dedo sobre el sobre para volver a empezar";
+  sonido.encender();
+
+  function cuadro(ahora) {
+    const dt = Math.min(50, ahora - anterior);
+    anterior = ahora;
+    const t = Math.min(1, (ahora - inicio) / DURACION_QUEMA_FIN);
+    const r = maximo * (t * t * 0.55 + t * 0.45);
+    const mascara = `radial-gradient(circle at ${ox}px ${oy}px, transparent ${r + 6}px, #000 ${r + 20}px)`;
+    papel.style.webkitMaskImage = mascara;
+    papel.style.maskImage = mascara;
+    sonido.fuego(1 - t * 0.5, 0.4);
+
+    cenizaCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    cenizaCtx.save();
+    cenizaCtx.beginPath();
+    cenizaCtx.rect(caja.left, caja.top, caja.width, caja.height);
+    cenizaCtx.clip();
+    const borde = (desfase) => {
+      cenizaCtx.beginPath();
+      for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        const rr = r + desfase + Math.sin(a * 5 + fase) * 7 + Math.sin(a * 11 - ahora * 0.004) * 4 + Math.sin(a * 23 + ahora * 0.009) * 2;
+        const x = caja.left + ox + Math.cos(a) * rr;
+        const y = caja.top + oy + Math.sin(a) * rr;
+        if (i) cenizaCtx.lineTo(x, y);
+        else cenizaCtx.moveTo(x, y);
+      }
+    };
+    borde(20);
+    cenizaCtx.strokeStyle = "rgba(35, 16, 6, 0.85)";
+    cenizaCtx.lineWidth = 26;
+    cenizaCtx.stroke();
+    cenizaCtx.globalCompositeOperation = "lighter";
+    [[11, 14, "rgba(255, 110, 30, 0.5)"], [11, 3, "rgba(255, 220, 140, 0.95)"]].forEach(([desfase, grosor, color]) => {
+      borde(desfase);
+      cenizaCtx.strokeStyle = color;
+      cenizaCtx.lineWidth = grosor;
+      cenizaCtx.stroke();
+    });
+    cenizaCtx.restore();
+
+    if (t < 1) {
+      for (let i = 0; i < 3; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const x = caja.left + ox + Math.cos(a) * (r + 10);
+        const y = caja.top + oy + Math.sin(a) * (r + 10);
+        if (x > caja.left && x < caja.right && y > caja.top && y < caja.bottom) chispas.push({ x, y, vy: -azar(0.03, 0.09), vx: azar(-0.02, 0.02), vida: 0, max: azar(500, 1100) });
+      }
+    }
+    cenizaCtx.globalCompositeOperation = "lighter";
+    for (let i = chispas.length - 1; i >= 0; i--) {
+      const p = chispas[i];
+      p.vida += dt;
+      if (p.vida > p.max) {
+        chispas.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      cenizaCtx.fillStyle = `rgba(255, ${Math.round(150 + 80 * (1 - p.vida / p.max))}, 60, ${(1 - p.vida / p.max).toFixed(2)})`;
+      cenizaCtx.fillRect(p.x, p.y, 2, 2);
+    }
+    cenizaCtx.globalCompositeOperation = "source-over";
+
+    if (t < 1 || chispas.length) requestAnimationFrame(cuadro);
+    else dejarCeniza(caja);
+  }
+  requestAnimationFrame(cuadro);
 }
 
-function ponerSelloRoto() {
-  [
-    ["polygon(0 0, 52% 0, 46% 30%, 55% 44%, 44% 62%, 52% 80%, 48% 100%, 0 100%)", "translate(-56%, -50%) rotate(-7deg)"],
-    ["polygon(52% 0, 100% 0, 100% 100%, 48% 100%, 52% 80%, 44% 62%, 55% 44%, 46% 30%)", "translate(-43%, -47%) rotate(6deg)"],
-  ].forEach(([forma, lugar]) => {
-    const mitad = sello.cloneNode(true);
-    mitad.removeAttribute("id");
-    Object.assign(mitad.style, { visibility: "visible", clipPath: forma, transform: lugar, pointerEvents: "none" });
-    sobre.appendChild(mitad);
-    mitad.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700 });
-  });
+function dejarCeniza(caja) {
+  papel.hidden = true;
+  sonido.apagarFuego();
+  cenizaCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  const brasas = [];
+  const base = caja.top + caja.height * 0.82;
+  const trozo = (x, y, lado, color, aplastado) => {
+    cenizaCtx.fillStyle = color;
+    cenizaCtx.beginPath();
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + azar(-0.4, 0.4);
+      const rr = lado * azar(0.45, 1);
+      if (k) cenizaCtx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * aplastado);
+      else cenizaCtx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * aplastado);
+    }
+    cenizaCtx.closePath();
+    cenizaCtx.fill();
+  };
+  for (let i = 0; i < 9; i++) {
+    const x = caja.left + caja.width * azar(0.2, 0.8);
+    const y = base + azar(-0.12, 0.06) * caja.height;
+    trozo(x, y, azar(9, 20), "rgba(28, 20, 15, 0.9)", 0.55);
+    trozo(x + azar(-3, 3), y + azar(-2, 2), azar(4, 8), "rgba(110, 100, 90, 0.35)", 0.5);
+  }
+  for (let i = 0; i < 220; i++) {
+    const montoncito = Math.random() < 0.7;
+    const ancho_ = montoncito ? 0.32 : 0.46;
+    const x = caja.left + caja.width * (0.5 + (Math.random() + Math.random() - 1) * ancho_);
+    const y = montoncito ? base - Math.abs(Math.random() + Math.random() - 1) * caja.height * 0.14 + azar(0, 8) : caja.top + caja.height * azar(0.35, 0.95);
+    const gris = Math.round(azar(70, 165));
+    trozo(x, y, azar(1.5, montoncito ? 5 : 3.5), `rgba(${gris}, ${gris - 6}, ${gris - 12}, ${azar(0.4, 0.9).toFixed(2)})`, 0.6);
+    if (montoncito && Math.random() < 0.08) brasas.push({ x, y });
+  }
+  const fondo = cenizaCtx.getImageData(0, 0, ceniza.width, ceniza.height);
+  const inicio = performance.now();
+  (function apagar(ahora) {
+    const t = Math.min(1, (ahora - inicio) / 3500);
+    cenizaCtx.putImageData(fondo, 0, 0);
+    brasas.forEach((b) => {
+      cenizaCtx.fillStyle = `rgba(255, 120, 40, ${((1 - t) * azar(0.4, 0.9)).toFixed(2)})`;
+      cenizaCtx.fillRect(b.x, b.y, 2, 2);
+    });
+    if (t < 1) requestAnimationFrame(apagar);
+  })(inicio);
+  estadoFinal = "ceniza";
+  clearInterval(reloj);
+  setTimeout(() => {
+    if (estadoFinal === "ceniza" && !reinicio) pista.textContent = "Mantén el dedo para volver a empezar";
+  }, 2500);
 }
 
-function soltarReinicio() {
-  if (!reinicio) return;
-  clearTimeout(reinicio.reloj);
-  reinicio = null;
-  sobre.classList.remove("reiniciando");
-}
-
-escenaSobre.addEventListener("pointerdown", (e) => {
-  if (estadoFinal !== "fin" || reinicio) return;
-  e.preventDefault();
-  sobre.classList.add("reiniciando");
-  reinicio = { id: e.pointerId, x: e.clientX, y: e.clientY, reloj: setTimeout(() => location.reload(), TIEMPO_REINICIO) };
-});
-escenaSobre.addEventListener("pointermove", (e) => {
-  if (reinicio && reinicio.id === e.pointerId && Math.hypot(e.clientX - reinicio.x, e.clientY - reinicio.y) > 30) soltarReinicio();
-});
-["pointerup", "pointercancel", "pointerleave"].forEach((tipo) => escenaSobre.addEventListener(tipo, soltarReinicio));
-escenaSobre.addEventListener("contextmenu", (e) => e.preventDefault());
-[escenaSobre, despedida].forEach((zona) =>
-  zona.addEventListener("touchstart", (e) => {
-    if (estadoFinal) e.preventDefault();
-  }, { passive: false })
-);
 window.addEventListener("resize", ajustarPapel);

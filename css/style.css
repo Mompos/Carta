@@ -707,8 +707,8 @@ body.cerillas-visibles #pista {
 }
 
 .lagrima,
-.salpicadura,
-.frase-lagrima {
+.lienzo-lagrima,
+.onda-lagrima {
   position: absolute;
   left: 0;
   top: 0;
@@ -721,22 +721,17 @@ body.cerillas-visibles #pista {
   will-change: transform, filter, opacity;
 }
 
-.salpicadura {
-  overflow: visible;
+.onda-lagrima {
+  border-radius: 50%;
+  border: 1.4px solid rgba(210, 228, 250, 0.7);
 }
 
-.frase-lagrima {
-  z-index: 1;
-  max-width: min(72vw, 400px);
-  width: max-content;
-  margin: 0;
-  text-align: center;
-  font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
-  font-size: clamp(22px, 6.2vw, 30px);
-  line-height: 1.15;
-  color: #efe6d3;
-  text-shadow: 0 0 10px rgba(20, 30, 45, 0.9), 0 0 4px rgba(20, 30, 45, 0.9);
-  opacity: 0;
+.ceniza {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .papel {
@@ -775,7 +770,7 @@ body.cerillas-visibles #pista {
 
 .papel-texto {
   position: relative;
-  padding: 0 12%;
+  padding: 10% 12%;
   text-align: center;
   font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive;
   font-size: var(--fuente-papel, 24px);
@@ -783,84 +778,15 @@ body.cerillas-visibles #pista {
   color: var(--tinta);
 }
 
-.ultima-carta span {
-  display: inline-block;
-  opacity: 0;
-}
-
-.papel.en-blanco .ultima-carta {
-  height: 4.5em;
-}
-
-.final-titulo,
-.final-huella {
-  font-family: "Times New Roman", Times, serif;
-  opacity: 0;
-}
-
-.final-titulo {
-  margin-top: 1em;
-  padding-top: 0.8em;
-  border-top: 1px solid rgba(90, 60, 20, 0.35);
-  font-size: 0.68em;
-  font-style: italic;
-  letter-spacing: 0.04em;
-  color: #6b4a22;
-}
-
 .final-frase {
-  margin-top: 0.35em;
-  font-size: 0.95em;
-  line-height: 1.2;
-}
-
-.final-frase .bloque {
-  display: inline-block;
-  white-space: nowrap;
-}
-
-.final-frase .letra {
-  opacity: 0;
-}
-
-.final-huella {
-  margin-top: 0.8em;
-  font-size: 0.6em;
-  font-style: italic;
-  line-height: 1.35;
-  color: #6b4a22;
-}
-
-.papel.solo-fin .papel-texto {
-  padding: 10% 12%;
-}
-
-.papel.solo-fin .ultima-carta,
-.papel.solo-fin .final-titulo,
-.papel.solo-fin .final-huella {
-  display: none;
-}
-
-.papel.solo-fin .final-frase {
   margin: 0;
   font-size: 3.4em;
   line-height: 1;
 }
 
-.papel.solo-fin .final-frase .letra {
+.final-frase .letra {
   display: inline-block;
+  opacity: 0;
 }
 
-.salpicadura {
-  transform-origin: center;
-}
 
-.sobre {
-  transition: transform 0.4s ease-out, filter 0.4s ease-out;
-}
-
-.sobre.reiniciando {
-  transform: scale(1.05);
-  filter: brightness(1.22);
-  transition: transform 2s linear, filter 2s linear;
-}

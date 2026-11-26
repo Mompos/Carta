@@ -567,6 +567,7 @@ body.cerillas-visibles #pista {
 .reverso {
   position: absolute;
   inset: 0;
+  z-index: 1;
   display: none;
   pointer-events: none;
   background: radial-gradient(ellipse at 60% 40%, rgba(255, 255, 255, 0.25), transparent 65%);
@@ -618,10 +619,21 @@ body.cerillas-visibles #pista {
   color: var(--tinta);
 }
 
-.foto-1 { left: 7%; top: 6%; width: 46%; transform: rotate(-6deg); }
-.foto-2 { right: 6%; top: 11%; width: 40%; transform: rotate(5deg); }
-.foto-3 { left: 10%; top: 47%; width: 41%; transform: rotate(4deg); }
-.foto-4 { right: 8%; top: 51%; width: 39%; transform: rotate(-4deg); }
+.foto img {
+  aspect-ratio: 1280 / 810;
+  filter: none;
+  -webkit-user-drag: none;
+}
+
+.foto-1 { left: 5%; top: 4%; width: 56%; transform: rotate(-5deg); }
+.foto-2 { right: 4%; top: 21%; width: 52%; transform: rotate(4deg); }
+.foto-3 { left: 6%; top: 40%; width: 52%; transform: rotate(3deg); }
+.foto-4 { right: 5%; bottom: 16%; width: 54%; transform: rotate(-4deg); }
+
+.foto-1 { z-index: 1; }
+.foto-2 { z-index: 4; }
+.foto-3 { z-index: 3; }
+.foto-4 { z-index: 2; }
 
 .imagen-1 {
   background:
